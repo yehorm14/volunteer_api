@@ -26,4 +26,3 @@ class Task(Base):
 
     # The relationship tells SQLAlchemy to fetch the specific user who owns this task
     owner = relationship("User", back_populates="tasks")
-

@@ -3,14 +3,16 @@ from typing import Annotated
 from fastapi import FastAPI, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordRequestForm
+from openai import OpenAI, OpenAIError
 
 import models, schemas, auth
 from database import engine, get_db
 
+client = OpenAI()
 #Command SQLAlchemy to physically build the tables on startup
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title = "Volunteer Task Manager API")
+app = FastAPI(title ="Volunteer Task Manager API")
 
 origins = [
     "http://localhost:5173",
@@ -188,10 +190,30 @@ def delete_task(
     
     return None
 
-@app.get("/tasks", response_model=list[schemas.TaskPublicView])
-def read_tasks(
+@app.post("/tasks/{task_id}/ai-categorize")
+def categorize_task_with_ai(
+    task_id: int,
     current_user: Annotated[models.User, Depends(auth.get_current_user)],
     db: Annotated[Session, Depends(get_db)]
 ):
-    tasks = db.query(models.Task).filter(models.Task.owner_id == current_user.id).all()
-    return tasks
+    task = db.query(models.Task).filter(models.Task.id == task_id, models.Task.owner_id == current_user.id).first()
+    
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a professional organizer. Categorize this task into one word and give a 10-word explanation."},
+                {"role": "user", "content": f"Title: {task.title}\nDescription: {task.description}"}
+            ],
+            timeout=10.0 # Don't let the request hang forever
+        )
+        ai_output = response.choices[0].message.content
+        return {"task_id": task.id, "ai_suggestion": ai_output}
+
+    except OpenAIError as e:
+        # This catches credit issues, rate limits, or connection errors
+        raise HTTPException(status_code=500, detail=f"AI Service Error: {str(e)}")
+
