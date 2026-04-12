@@ -8,10 +8,8 @@ from fastapi.security import OAuth2PasswordRequestForm
 import asyncio
 from openai import OpenAI, AsyncOpenAI, RateLimitError, APIConnectionError, OpenAIError
 
-import frontend.models as models
-import frontend.schemas as schemas
-import frontend.auth as auth
-from frontend.database import engine, get_db
+from . import models, schemas, auth
+from .database import engine, get_db
 
 load_dotenv()
 
