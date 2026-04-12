@@ -47,3 +47,10 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     email: str | None = None
+
+class ParsedTask(BaseModel):
+    title: str
+    description: str
+
+    model_config = {"from_attributes": True}
+

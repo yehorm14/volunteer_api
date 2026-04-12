@@ -1,9 +1,9 @@
-# Environments
+# Python
 venv/
 env/
 __pycache__/
-.vscode/
-.idea/
+*.pyc
+*.pyo
 
 # Database
 *.db
@@ -11,3 +11,24 @@ __pycache__/
 
 # Secrets
 .env
+.env.*
+
+# Node / frontend
+node_modules/
+dist/
+.cache/
+
+# Accidentally created root-level package-lock (npm run in wrong directory)
+/package-lock.json
+
+# Claude Code
+.claude/
+Claude.md
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
