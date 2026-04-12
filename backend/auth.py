@@ -9,8 +9,8 @@ from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 
-import models
-from database import get_db
+import frontend.models as models
+from frontend.database import get_db
 
 # Load variables from the .env file
 load_dotenv()

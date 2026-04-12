@@ -1,18 +1,27 @@
+# main.py
+from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Annotated
 from fastapi import FastAPI, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordRequestForm
-from openai import OpenAI, OpenAIError
+import asyncio
+from openai import OpenAI, AsyncOpenAI, RateLimitError, APIConnectionError, OpenAIError
 
-import models, schemas, auth
-from database import engine, get_db
+import frontend.models as models
+import frontend.schemas as schemas
+import frontend.auth as auth
+from frontend.database import engine, get_db
+
+load_dotenv()
 
 client = OpenAI()
-#Command SQLAlchemy to physically build the tables on startup
+aclient = AsyncOpenAI()
+
+# Command SQLAlchemy to physically build the tables on startup
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title ="Volunteer Task Manager API")
+app = FastAPI(title="Volunteer Task Manager API")
 
 origins = [
     "http://localhost:5173",
@@ -33,6 +42,7 @@ app.add_middleware(
 @app.get("/")
 def read_root():
     return {"message": "Welcome to the Volunteer Task Manager API!"}
+
 
 @app.post("/auth/register", response_model=schemas.UserResponse, status_code=status.HTTP_201_CREATED)
 def register_user(
@@ -63,12 +73,13 @@ def register_user(
     
     return new_user
 
+
 @app.post("/auth/login", response_model=schemas.Token)
 def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: Annotated[Session, Depends(get_db)]
 ):
-    #  Find the user in the database
+    # Find the user in the database
     user = db.query(models.User).filter(models.User.email == form_data.username).first()
     
     if not user:
@@ -78,7 +89,7 @@ def login_for_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    #  Verify the password hash
+    # Verify the password hash
     if not auth.verify_password(form_data.password, user.hashed_password): # type: ignore
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -86,7 +97,7 @@ def login_for_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    #  Generate the JWT token
+    # Generate the JWT token
     access_token = auth.create_access_token(data={"sub": user.email})
 
     # Return the token 
@@ -112,6 +123,7 @@ def create_task(
     
     return new_task
 
+
 @app.get("/tasks", response_model=list[schemas.Task])
 def read_tasks(
     current_user: Annotated[models.User, Depends(auth.get_current_user)],
@@ -120,6 +132,7 @@ def read_tasks(
     # Fetch only the tasks that belong to the authenticated user
     tasks = db.query(models.Task).filter(models.Task.owner_id == current_user.id).all()
     return tasks
+
 
 @app.get("/tasks/{task_id}", response_model=schemas.Task)
 def read_task(
@@ -138,6 +151,7 @@ def read_task(
         )
         
     return task
+
 
 @app.patch("/tasks/{task_id}", response_model=schemas.Task)
 def update_task(
@@ -168,6 +182,7 @@ def update_task(
     
     return task
 
+
 @app.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_task(
     task_id: int,
@@ -189,6 +204,7 @@ def delete_task(
     db.commit()
     
     return None
+
 
 @app.post("/tasks/{task_id}/ai-categorize")
 def categorize_task_with_ai(
@@ -217,3 +233,72 @@ def categorize_task_with_ai(
         # This catches credit issues, rate limits, or connection errors
         raise HTTPException(status_code=500, detail=f"AI Service Error: {str(e)}")
 
+
+@app.post("/tasks/extract", response_model=schemas.Task, status_code=status.HTTP_201_CREATED)
+async def extract_task_from_notes(
+    notes: str,
+    current_user: Annotated[models.User, Depends(auth.get_current_user)],
+    db: Annotated[Session, Depends(get_db)]
+) -> models.Task:
+    """
+    Extracts a structured task from messy notes using AI with robust error handling.
+    """
+    max_attempts = 2
+    
+    for attempt in range(max_attempts):
+        try:
+            response = await aclient.beta.chat.completions.parse(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system", 
+                        "content": "You are a professional secretary. Extract a volunteer task from the notes. Keep the title concise."
+                    },
+                    {"role": "user", "content": notes}
+                ],
+                response_format=schemas.ParsedTask,
+                timeout=15.0  # Prevent the request from hanging
+            )
+            
+            ai_message = response.choices[0].message
+            
+            # Handle Model Refusals (Safety Guardrails)
+            if getattr(ai_message, "refusal", None):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, 
+                    detail=f"AI Refusal: {ai_message.refusal}"
+                )
+            
+            extracted_data = ai_message.parsed
+            if not extracted_data:
+                raise HTTPException(status_code=500, detail="AI failed to parse content.")
+
+            # Create the database record using existing Task model
+            new_task = models.Task(
+                title=extracted_data.title,
+                description=extracted_data.description,
+                owner_id=current_user.id,
+                status="pending"
+            )
+            
+            db.add(new_task)
+            db.commit()
+            db.refresh(new_task)
+            
+            return new_task
+
+        except (RateLimitError, APIConnectionError):
+            if attempt == max_attempts - 1:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE, 
+                    detail="AI service is currently overloaded or unreachable."
+                )
+            await asyncio.sleep(1.5 * (attempt + 1))
+            
+        except OpenAIError as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+                detail=f"AI Provider Error: {str(e)}"
+            )
+    
+    raise HTTPException(status_code=500, detail="Extraction failed unexpectedly.")
