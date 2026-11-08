@@ -32,3 +32,10 @@ Claude.md
 # OS
 .DS_Store
 Thumbs.db
+# Python extras
+.venv/
+.pytest_cache/
+*.tmp
+.env.local
+!.env.example
+!frontend/.env.example
