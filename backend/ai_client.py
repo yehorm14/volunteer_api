@@ -6,11 +6,8 @@ The dependencies below return HTTP 503 when the key is missing.
 import os
 from functools import lru_cache
 
-from dotenv import load_dotenv
 from fastapi import HTTPException, status
 from openai import AsyncOpenAI, OpenAI
-
-load_dotenv()
 
 AI_DISABLED_DETAIL = "AI features disabled: OPENAI_API_KEY not set"
 

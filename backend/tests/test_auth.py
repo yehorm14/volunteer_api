@@ -25,7 +25,7 @@ def test_login_returns_valid_jwt(client):
     assert r.status_code == 200
     body = r.json()
     assert body["token_type"] == "bearer"
-    claims = jwt.decode(body["access_token"], auth.SECRET_KEY, algorithms=[auth.ALGORITHM])
+    claims = jwt.decode(body["access_token"], auth.get_secret_key(), algorithms=[auth._algorithm()])
     assert claims["sub"] == "a@example.com"
 
 
@@ -58,4 +58,26 @@ def test_invalid_token_rejected(client):
 def test_token_for_deleted_user_rejected(client):
     token = auth.create_access_token({"sub": "ghost@example.com"})
     r = client.get("/tasks", headers={"Authorization": f"Bearer {token}"})
+    assert r.status_code == 401
+
+
+def test_register_rejects_password_over_72_bytes(client):
+    r = client.post("/auth/register", json={"email": "a@example.com", "password": "x" * 73})
+    assert r.status_code == 422
+
+
+def test_register_counts_bytes_not_characters(client):
+    # 37 two-byte characters = 74 bytes, but only 37 characters.
+    r = client.post("/auth/register", json={"email": "a@example.com", "password": "é" * 37})
+    assert r.status_code == 422
+
+
+def test_register_accepts_72_byte_password(client):
+    r = client.post("/auth/register", json={"email": "a@example.com", "password": "x" * 72})
+    assert r.status_code == 201
+
+
+def test_login_with_over_long_password_is_401_not_500(client):
+    client.post("/auth/register", json={"email": "a@example.com", "password": "pw12345"})
+    r = client.post("/auth/login", data={"username": "a@example.com", "password": "x" * 100})
     assert r.status_code == 401

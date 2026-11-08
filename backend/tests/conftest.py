@@ -1,7 +1,10 @@
 import os
+import tempfile
 
-# Must be set before the app modules are imported (auth.py requires SECRET_KEY).
-os.environ.setdefault("SECRET_KEY", "test-secret-key")
+# Set the environment BEFORE importing the app. Tests never read a developer's .env:
+# only the real entry point (backend.main.app) loads it.
+os.environ["SECRET_KEY"] = "test-secret-key"
+os.environ["DATABASE_URL"] = f"sqlite:///{tempfile.mkdtemp()}/test.db"
 os.environ.pop("OPENAI_API_KEY", None)
 
 import pytest
@@ -10,9 +13,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from backend import models
 from backend.database import Base, get_db
-from backend.main import app
+from backend.main import create_app
 
 
 @pytest.fixture()
@@ -23,6 +25,8 @@ def client():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+    from backend import models  # noqa: F401
+
     Base.metadata.create_all(bind=engine)
     TestingSession = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -33,10 +37,10 @@ def client():
         finally:
             db.close()
 
+    app = create_app()
     app.dependency_overrides[get_db] = override_get_db
     with TestClient(app) as c:
         yield c
-    app.dependency_overrides.clear()
     Base.metadata.drop_all(bind=engine)
 
 

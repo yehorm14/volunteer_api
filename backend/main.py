@@ -1,36 +1,62 @@
 import os
+from contextlib import asynccontextmanager
+from pathlib import Path
 
-from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-load_dotenv()
-
-from . import models  # noqa: E402
-from .database import engine  # noqa: E402
-from .routers import ai, auth, tasks  # noqa: E402
-
-# Create tables on startup (no migrations in this project).
-models.Base.metadata.create_all(bind=engine)
-
-app = FastAPI(title="Volunteer Task Manager API")
+from . import auth
+from .database import init_db
+from .routers import ai, auth as auth_router, tasks
 
 DEFAULT_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000"
-origins = [o.strip() for o in (os.getenv("CORS_ORIGINS") or DEFAULT_ORIGINS).split(",") if o.strip()]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.include_router(auth.router)
-app.include_router(tasks.router)
-app.include_router(ai.router)
 
 
-@app.get("/")
-def read_root():
-    return {"message": "Welcome to the Volunteer Task Manager API!"}
+def parse_origins(raw: str | None) -> list[str]:
+    """Split a comma-separated CORS_ORIGINS value; browsers send origins without a trailing slash."""
+    value = raw or DEFAULT_ORIGINS
+    return [o.strip().rstrip("/") for o in value.split(",") if o.strip()]
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    init_db()
+    yield
+
+
+def create_app(load_env: bool = False) -> FastAPI:
+    """Build the app. Only the real entry point (`app` below) loads .env; tests never do."""
+    if load_env:
+        from dotenv import load_dotenv
+
+        load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+
+    auth.get_secret_key()  # fail fast with a clear error if SECRET_KEY is missing
+
+    application = FastAPI(title="Volunteer Task Manager API", lifespan=lifespan)
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=parse_origins(os.getenv("CORS_ORIGINS")),
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    application.include_router(auth_router.router)
+    application.include_router(tasks.router)
+    application.include_router(ai.router)
+
+    @application.get("/")
+    def read_root():
+        return {"message": "Welcome to the Volunteer Task Manager API!"}
+
+    return application
+
+
+def __getattr__(name: str):
+    # `uvicorn backend.main:app` resolves `app` here, so importing this module
+    # (as the tests do) neither reads .env nor needs SECRET_KEY.
+    if name == "app":
+        application = create_app(load_env=True)
+        globals()["app"] = application
+        return application
+    raise AttributeError(name)

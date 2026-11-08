@@ -2,16 +2,15 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy.orm import Session
 
 from .. import auth, models, schemas
-from ..database import get_db
+from ..deps import DB
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=schemas.UserResponse, status_code=status.HTTP_201_CREATED)
-def register_user(user_in: schemas.UserCreate, db: Annotated[Session, Depends(get_db)]):
+def register_user(user_in: schemas.UserCreate, db: DB):
     if db.query(models.User).filter(models.User.email == user_in.email).first():
         raise HTTPException(status_code=400, detail="A user with this email already exists.")
 
@@ -28,7 +27,7 @@ def register_user(user_in: schemas.UserCreate, db: Annotated[Session, Depends(ge
 @router.post("/login", response_model=schemas.Token)
 def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-    db: Annotated[Session, Depends(get_db)],
+    db: DB,
 ):
     user = db.query(models.User).filter(models.User.email == form_data.username).first()
 

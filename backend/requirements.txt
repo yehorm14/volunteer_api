@@ -7,3 +7,4 @@ bcrypt~=5.0.0
 python-multipart~=0.0.33
 openai~=3.46.0
 python-dotenv~=1.2.0
+psycopg2-binary~=2.9.10

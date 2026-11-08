@@ -1,23 +1,9 @@
-from typing import Annotated
+from fastapi import APIRouter, status
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-
-from .. import auth, models, schemas
-from ..database import get_db
+from .. import schemas, models
+from ..deps import DB, CurrentUser, get_owned_task
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
-
-CurrentUser = Annotated[models.User, Depends(auth.get_current_user)]
-DB = Annotated[Session, Depends(get_db)]
-
-
-def get_owned_task(db: Session, task_id: int, user: models.User) -> models.Task:
-    """Return the task if it exists and belongs to user, otherwise raise 404."""
-    task = db.query(models.Task).filter(models.Task.id == task_id).first()
-    if not task or task.owner_id != user.id:  # type: ignore
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
-    return task
 
 
 @router.post("", response_model=schemas.Task, status_code=status.HTTP_201_CREATED)

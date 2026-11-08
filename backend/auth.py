@@ -7,32 +7,41 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
-from dotenv import load_dotenv
 
 from . import models
 from .database import get_db
 
-# Load variables from the .env file
-load_dotenv()
+# bcrypt only uses the first 72 bytes and bcrypt 5 raises on longer input.
+MAX_PASSWORD_BYTES = 72
 
-SECRET_KEY: str = os.getenv("SECRET_KEY", "")
-if not SECRET_KEY:
-    raise RuntimeError(
-        "SECRET_KEY environment variable is not set. "
-        "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(32))\""
-    )
-ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+
+def get_secret_key() -> str:
+    """Read SECRET_KEY at call time; there is deliberately no fallback value."""
+    key = os.getenv("SECRET_KEY", "")
+    if not key:
+        raise RuntimeError(
+            "SECRET_KEY environment variable is not set. "
+            'Generate one with: python -c "import secrets; print(secrets.token_urlsafe(32))"'
+        )
+    return key
+
+
+def _algorithm() -> str:
+    return os.getenv("ALGORITHM", "HS256")
+
+
+def _expire_minutes() -> int:
+    return int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+
 
 # This tells FastAPI where the frontend should send the login data
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    # Bcrypt requires strings to be converted to bytes before checking
-    return bcrypt.checkpw(
-        plain_password.encode('utf-8'), 
-        hashed_password.encode('utf-8')
-    )
+    password_bytes = plain_password.encode("utf-8")
+    if len(password_bytes) > MAX_PASSWORD_BYTES:
+        return False  # cannot match any stored hash; avoids a bcrypt ValueError
+    return bcrypt.checkpw(password_bytes, hashed_password.encode("utf-8"))
 
 def get_password_hash(password: str) -> str:
     # Generate a random salt and hash the password
@@ -43,9 +52,9 @@ def get_password_hash(password: str) -> str:
 
 def create_access_token(data: dict):
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=_expire_minutes())
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, get_secret_key(), algorithm=_algorithm())
     return encoded_jwt
 
 # This is the dependency we will attach to any protected route
@@ -61,7 +70,7 @@ def get_current_user(
     
     try:
         # Decode the token to extract the user email
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, get_secret_key(), algorithms=[_algorithm()])
         # The | None satisfies the Pylance type checker for dictionary get methods
         email: str | None = payload.get("sub")
         if email is None:

@@ -1,30 +1,26 @@
 import asyncio
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from openai import APIConnectionError, AsyncOpenAI, OpenAI, OpenAIError, RateLimitError
-from sqlalchemy.orm import Session
 
-from .. import auth, models, schemas
+from .. import models, schemas
 from ..ai_client import get_async_openai_client, get_openai_client
-from ..database import get_db
-from .tasks import get_owned_task
+from ..deps import DB, CurrentUser, OwnedTask
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/tasks", tags=["ai"])
 
-CurrentUser = Annotated[models.User, Depends(auth.get_current_user)]
-DB = Annotated[Session, Depends(get_db)]
+AI_UNAVAILABLE_DETAIL = "AI service is currently unavailable. Please try again later."
 
 
 @router.post("/{task_id}/ai-categorize")
 def categorize_task_with_ai(
-    task_id: int,
-    current_user: CurrentUser,
-    db: DB,
+    task: OwnedTask,  # resolved first: 404 for a missing/foreign task beats 503 for a missing key
     client: Annotated[OpenAI, Depends(get_openai_client)],
 ):
-    task = get_owned_task(db, task_id, current_user)
-
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -38,8 +34,9 @@ def categorize_task_with_ai(
             timeout=10.0,
         )
         return {"task_id": task.id, "ai_suggestion": response.choices[0].message.content}
-    except OpenAIError as e:
-        raise HTTPException(status_code=500, detail=f"AI Service Error: {str(e)}")
+    except OpenAIError:
+        logger.exception("OpenAI categorize request failed")
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=AI_UNAVAILABLE_DETAIL)
 
 
 @router.post("/extract", response_model=schemas.Task, status_code=status.HTTP_201_CREATED)
@@ -92,16 +89,12 @@ async def extract_task_from_notes(
 
         except (RateLimitError, APIConnectionError):
             if attempt == max_attempts - 1:
-                raise HTTPException(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="AI service is currently overloaded or unreachable.",
-                )
+                logger.exception("OpenAI extract request failed after retries")
+                raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=AI_UNAVAILABLE_DETAIL)
             await asyncio.sleep(1.5 * (attempt + 1))
 
-        except OpenAIError as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"AI Provider Error: {str(e)}",
-            )
+        except OpenAIError:
+            logger.exception("OpenAI extract request failed")
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=AI_UNAVAILABLE_DETAIL)
 
     raise HTTPException(status_code=500, detail="Extraction failed unexpectedly.")
