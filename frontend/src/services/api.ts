@@ -11,8 +11,20 @@ import type {
 
 // ── Instance ────────────────────────────────────────────────
 
-// VITE_API_URL is set for production builds; in dev, /api is proxied to the backend by Vite.
-const API_BASE_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$/, '') || '/api'
+// VITE_API_URL is required for production builds. In dev, /api is proxied to the backend by Vite.
+// A production build without it would send API calls to the host's SPA rewrite, so it is reported as a config error.
+const envApiUrl = (import.meta.env.VITE_API_URL as string | undefined)?.trim().replace(/\/+$/, '')
+
+export const API_CONFIG_ERROR: string | null =
+  !envApiUrl && import.meta.env.PROD
+    ? 'VITE_API_URL is not set. Set it to the backend URL and rebuild the frontend.'
+    : null
+
+if (API_CONFIG_ERROR) {
+  console.error(`[config] ${API_CONFIG_ERROR}`)
+}
+
+const API_BASE_URL = envApiUrl || '/api'
 
 const api = axios.create({
   baseURL: API_BASE_URL,
