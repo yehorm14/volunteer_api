@@ -16,4 +16,4 @@ services:
       - key: CORS_ORIGINS
         sync: false # set to the frontend URL, e.g. https://your-app.vercel.app
       # SQLite lives on the free instance's ephemeral disk and resets on redeploy.
-      # Set DATABASE_URL to a persistent location to keep data.
+      # Set DATABASE_URL to a Postgres URL (postgres:// is accepted) to keep data.
