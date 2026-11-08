@@ -20,12 +20,6 @@ class Task(TaskBase):
 
     model_config = {"from_attributes": True}
 
-class TaskPublicView(TaskBase):
-    owner_id: int
-    
-    class Config:
-        from_attributes = True
-
 # User Schemas
 class UserBase(BaseModel):
     email: str
