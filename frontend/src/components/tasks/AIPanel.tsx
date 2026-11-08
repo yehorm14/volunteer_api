@@ -20,9 +20,12 @@ export default function AIPanel({ taskId, taskTitle }: AIPanelProps) {
   const [extractResult, setExtractResult] = useState<Task | null>(null)
   const [extractLoading, setExtractLoading] = useState(false)
   const [extractError, setExtractError] = useState('')
+  // True when the backend answers 503: AI is not configured (no OPENAI_API_KEY) or unreachable.
+  const [aiUnavailable, setAiUnavailable] = useState('')
 
   async function handleCategorize() {
     setCatLoading(true)
+    setAiUnavailable('')
     setCatError('')
     setCatResult(null)
     try {
@@ -30,7 +33,11 @@ export default function AIPanel({ taskId, taskTitle }: AIPanelProps) {
       setCatResult(result)
     } catch (err) {
       const e = err as AxiosError<ApiError>
-      setCatError(e.response?.data?.detail ?? 'Failed to categorize task')
+      if (e.response?.status === 503) {
+        setAiUnavailable(e.response.data?.detail ?? 'AI features are unavailable')
+      } else {
+        setCatError(e.response?.data?.detail ?? 'Failed to categorize task')
+      }
     } finally {
       setCatLoading(false)
     }
@@ -39,6 +46,7 @@ export default function AIPanel({ taskId, taskTitle }: AIPanelProps) {
   async function handleExtract() {
     if (!notes.trim()) return
     setExtractLoading(true)
+    setAiUnavailable('')
     setExtractError('')
     setExtractResult(null)
     try {
@@ -46,7 +54,11 @@ export default function AIPanel({ taskId, taskTitle }: AIPanelProps) {
       setExtractResult(task)
     } catch (err) {
       const e = err as AxiosError<ApiError>
-      setExtractError(e.response?.data?.detail ?? 'Failed to extract task from notes')
+      if (e.response?.status === 503) {
+        setAiUnavailable(e.response.data?.detail ?? 'AI features are unavailable')
+      } else {
+        setExtractError(e.response?.data?.detail ?? 'Failed to extract task from notes')
+      }
     } finally {
       setExtractLoading(false)
     }
@@ -55,6 +67,15 @@ export default function AIPanel({ taskId, taskTitle }: AIPanelProps) {
   return (
     <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-5 space-y-6">
       <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">AI Tools</h2>
+
+      {aiUnavailable && (
+        <div
+          role="status"
+          className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-sm text-amber-300"
+        >
+          {aiUnavailable}
+        </div>
+      )}
 
       {/* Categorize */}
       <div>

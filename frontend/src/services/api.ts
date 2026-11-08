@@ -11,8 +11,11 @@ import type {
 
 // ── Instance ────────────────────────────────────────────────
 
+// VITE_API_URL is set for production builds; in dev, /api is proxied to the backend by Vite.
+const API_BASE_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$/, '') || '/api'
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json' },
 })
 
