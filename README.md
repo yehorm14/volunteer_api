@@ -1,187 +1,64 @@
 # Volunteer Task Manager
 
-A full-stack web application for managing volunteer assignments. Built as a personal project to practice modern full-stack development with FastAPI and React. Features secure JWT authentication, complete task CRUD, AI-powered task tools, and a clean responsive UI.
+A task manager for volunteer coordinators, with optional GPT-4o-mini helpers for categorising tasks and turning notes into tasks.
 
----
+![Dashboard showing five tasks grouped by status](docs/images/dashboard.png)
 
-## Core Features
+## Why it is useful
 
-* **Secure Authentication**
-    * User registration with real-time password hashing using the Bcrypt engine.
-    * Stateless session management using JSON Web Tokens (JWT).
-    * Protected routes on both the frontend and backend requiring a valid bearer token.
+- Keeps volunteer assignments in one place instead of scattered notes.
+- Each account sees only its own tasks.
+- Free-text notes become a structured task in one step.
 
-* **Task Management**
-    * Complete CRUD (Create, Read, Update, Delete) for volunteer tasks.
-    * Support for partial updates (PATCH) to modify status or title without data loss.
-    * Automated ownership mapping — tasks are always linked to the authenticated user.
-    * Optimistic UI updates on the frontend with automatic rollback on failure.
+## Features
 
-* **AI Features**
-    * **AI Categorize** — analyses a task's title and description and returns a one-word category with a brief explanation, powered by GPT-4o Mini.
-    * **Extract from Notes** — takes messy freeform notes and uses structured output parsing to extract a properly formatted task title and description.
+- Register and log in with email and password (bcrypt hashes, JWT bearer tokens).
+- Create, view, edit and delete tasks with `pending`, `in_progress` and `completed` status.
+- Dashboard with status counts, filter tabs and optimistic updates that roll back on failure.
+- Ownership checks on every task route; another user's task returns 404.
+- AI categorise: one-word category and short explanation for a task.
+- AI extract: saves a task parsed from free-text notes using structured output.
+- AI is optional: without `OPENAI_API_KEY` those two endpoints return 503 and the UI shows a notice.
 
-* **Modern Frontend**
-    * React 18 with TypeScript for a fully type-safe component tree.
-    * Tailwind CSS dark-mode UI with a consistent design system.
-    * Filter tabs, task stats dashboard, modal creation flow, and inline edit/delete on task detail pages.
-    * Fully responsive layout down to mobile screen widths.
+## How it works
 
-* **Data Isolation & Security**
-    * Strict database-level filtering ensures users can only access their own records.
-    * Ownership verification on every update and delete request.
-    * CORS middleware pre-configured for the Vite development server.
+- React app (Axios) calls a FastAPI app split into `auth`, `tasks` and `ai` routers.
+- SQLAlchemy stores users and tasks in SQLite, or Postgres via `DATABASE_URL`.
+- The OpenAI client is created on first use, so the API starts without a key.
 
-* **Developer Experience**
-    * Interactive API documentation auto-generated via Swagger UI at `/docs`.
-    * Rigorous data validation and clear error reporting using Pydantic V2.
-    * Clean, modular code structure across both frontend and backend.
+## Tech stack
 
----
+- Backend: Python 3.13, FastAPI, SQLAlchemy, python-jose, bcrypt, Pydantic v2
+- Frontend: React 18, TypeScript, Vite, Tailwind CSS, React Router
+- Data and AI: SQLite, OpenAI `gpt-4o-mini`
+- Tooling: pytest, GitHub Actions
 
-## Tech Stack
+## Run locally
 
-| Category | Technology | Purpose |
-| :--- | :--- | :--- |
-| **Backend Framework** | FastAPI | High-performance async web framework |
-| **Database** | SQLite | Lightweight relational storage |
-| **ORM** | SQLAlchemy | Python object to database table mapping |
-| **Security** | Bcrypt & JWT | Industry-standard hashing and session tokens |
-| **Validation** | Pydantic V2 | Strict type checking and data serialisation |
-| **AI** | OpenAI GPT-4o Mini | Task categorisation and note extraction |
-| **Frontend** | React 18 + TypeScript | Type-safe component-based UI |
-| **Styling** | Tailwind CSS | Utility-first responsive design |
-| **Build Tool** | Vite | Fast dev server with HMR and proxy |
-| **HTTP Client** | Axios | API requests with JWT interceptors |
-| **Routing** | React Router v6 | Client-side routing with auth guards |
-
----
-
-## Project Structure
-
-```
-volunteer_api/
-├── backend/
-│   ├── __init__.py
-│   ├── main.py          # FastAPI app, all route handlers
-│   ├── models.py        # SQLAlchemy ORM models
-│   ├── schemas.py       # Pydantic request/response schemas
-│   ├── auth.py          # JWT logic and password hashing
-│   ├── database.py      # DB engine, session, Base
-│   └── requirements.txt
-├── frontend/
-│   ├── index.html
-│   ├── package.json
-│   ├── vite.config.ts
-│   ├── tailwind.config.ts
-│   └── src/
-│       ├── main.tsx
-│       ├── App.tsx
-│       ├── types/         # Shared TypeScript interfaces
-│       ├── services/      # Axios API client
-│       ├── context/       # AuthContext, TasksContext
-│       ├── hooks/         # useAuth, useTasks
-│       ├── components/    # UI primitives, layout, task components
-│       └── pages/         # Landing, Login, Register, Dashboard, TaskDetail
-└── README.md
-```
-
----
-
-## Setup Instructions
-
-### Backend
-
-#### 1. Clone the Repository
-Clone this repository to your local machine and navigate into the project directory.
-
-#### 2. Create a Virtual Environment
 ```bash
-python -m venv venv
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r backend/requirements-dev.txt
+cp .env.example .env   # set SECRET_KEY (required); OPENAI_API_KEY is optional
+uvicorn backend.main:app --reload
 ```
 
-#### 3. Activate the Environment
+In a second terminal:
+
 ```bash
-# Windows (PowerShell)
-venv\Scripts\activate
-
-# Mac or Linux
-source venv/bin/activate
+cd frontend && npm ci && npm run dev
 ```
 
-#### 4. Install Dependencies
-```bash
-pip install -r backend/requirements.txt
-```
+Open `http://localhost:5173`. The API runs on port 8000 with docs at `/docs`. Data is stored in `backend/volunteer.db`. Environment variables and deployment are in [docs/DEPLOY.md](docs/DEPLOY.md).
 
-#### 5. Configure Environment Variables
-Create a `.env` file in the project root with the following:
+## Tests
 
-```plaintext
-SECRET_KEY=your_super_secret_key_here
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-OPENAI_API_KEY=your_openai_api_key_here
-```
+43 tests: `python -m pytest`. The frontend check is `cd frontend && npm run build`.
 
-#### 6. Launch the Backend Server
-```bash
-fastapi dev backend/main.py
-```
+## Limitations
 
-The API will be available at `http://127.0.0.1:8000`.
+- No migrations (tables are created at startup) and no frontend tests.
+- AI endpoints are tested with a mocked OpenAI client only.
 
----
+## Licence
 
-### Frontend
-
-#### 1. Navigate to the Frontend Directory
-```bash
-cd frontend
-```
-
-#### 2. Install Dependencies
-```bash
-npm install
-```
-
-#### 3. Start the Development Server
-```bash
-npm run dev
-```
-
-The frontend will be available at `http://localhost:5173` and automatically proxies all `/api` requests to the backend on port 8000.
-
----
-
-## API Endpoints Reference
-
-### Authentication
-
-| Endpoint | Method | Description |
-| :--- | :--- | :--- |
-| `/auth/register` | POST | Create a new volunteer account |
-| `/auth/login` | POST | Log in and receive a JWT access token |
-
-### Tasks
-
-| Endpoint | Method | Auth | Description |
-| :--- | :--- | :--- | :--- |
-| `/tasks` | GET | Required | List all tasks for the current user |
-| `/tasks` | POST | Required | Create a new task |
-| `/tasks/{id}` | GET | Required | Retrieve a single task |
-| `/tasks/{id}` | PATCH | Required | Update task fields (title, status, description) |
-| `/tasks/{id}` | DELETE | Required | Permanently delete a task |
-
-### AI
-
-| Endpoint | Method | Auth | Description |
-| :--- | :--- | :--- | :--- |
-| `/tasks/{id}/ai-categorize` | POST | Required | Categorise a task using GPT-4o Mini |
-| `/tasks/extract` | POST | Required | Extract a structured task from freeform notes |
-
----
-
-## Testing the API
-
-With the backend running, visit `http://127.0.0.1:8000/docs` to access the Swagger UI. Register a user, click **Authorize**, log in with your credentials, and begin interacting with all protected endpoints directly in the browser.
+MIT. See [LICENSE](LICENSE).

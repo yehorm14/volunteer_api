@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: volunteer-task-manager-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.5
+      - key: SECRET_KEY
+        generateValue: true
+      - key: OPENAI_API_KEY
+        sync: false # optional: leave empty to run with AI features disabled
+      - key: CORS_ORIGINS
+        sync: false # set to the frontend URL, e.g. https://your-app.vercel.app
+      # SQLite lives on the free instance's ephemeral disk and resets on redeploy.
+      # Set DATABASE_URL to a Postgres URL (postgres:// is accepted) to keep data.

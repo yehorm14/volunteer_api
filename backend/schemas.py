@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 # Task Schemas
 class TaskBase(BaseModel):
@@ -20,18 +20,20 @@ class Task(TaskBase):
 
     model_config = {"from_attributes": True}
 
-class TaskPublicView(TaskBase):
-    owner_id: int
-    
-    class Config:
-        from_attributes = True
-
 # User Schemas
 class UserBase(BaseModel):
     email: str
 
 class UserCreate(UserBase):
     password: str
+
+    @field_validator("password")
+    @classmethod
+    def password_fits_bcrypt(cls, v: str) -> str:
+        # bcrypt limit is in bytes, not characters.
+        if len(v.encode("utf-8")) > 72:
+            raise ValueError("Password must be at most 72 bytes")
+        return v
 
 class UserResponse(UserBase):
     id: int
