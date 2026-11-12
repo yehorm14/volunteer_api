@@ -3,6 +3,17 @@ import { Link, useNavigate, Navigate } from 'react-router-dom'
 import type { AxiosError } from 'axios'
 import { useAuth } from '../hooks/useAuth'
 import type { ApiError } from '../types'
+
+const MIN_PASSWORD_LENGTH = 8
+
+// 422 validation errors carry a list in `detail`, so show a fixed message instead of that list
+function registerErrorMessage(err: AxiosError<ApiError>): string {
+  const detail = err.response?.data?.detail
+  if (err.response?.status === 422) {
+    return `Check your details. Passwords need at least ${MIN_PASSWORD_LENGTH} characters (72 bytes at most) and the email must be valid.`
+  }
+  return detail ?? 'Registration failed. Try a different email.'
+}
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 
@@ -27,10 +38,7 @@ export default function Register() {
       await register(email, password)
       navigate('/dashboard', { replace: true })
     } catch (err) {
-      const axiosError = err as AxiosError<ApiError>
-      setError(
-        axiosError.response?.data?.detail ?? 'Registration failed. Try a different email.'
-      )
+      setError(registerErrorMessage(err as AxiosError<ApiError>))
     } finally {
       setSubmitting(false)
     }
@@ -72,7 +80,8 @@ export default function Register() {
               placeholder="••••••••"
               required
               autoComplete="new-password"
-              minLength={6}
+              minLength={MIN_PASSWORD_LENGTH}
+              hint={`At least ${MIN_PASSWORD_LENGTH} characters`}
             />
             <Button type="submit" isLoading={submitting} className="w-full mt-2">
               Create account

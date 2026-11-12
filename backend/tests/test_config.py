@@ -50,10 +50,10 @@ def test_importing_app_modules_does_not_load_dotenv(tmp_path):
 
 
 def test_entry_point_loads_dotenv(tmp_path):
-    root = _sandbox_repo(tmp_path, "SECRET_KEY=from-dotenv\n")
+    root = _sandbox_repo(tmp_path, "SECRET_KEY=from-dotenv-0123456789\n")
     out = _run("import os, backend.main as m; m.app; print(os.getenv('SECRET_KEY'))", root)
     assert out.returncode == 0, out.stderr
-    assert out.stdout.strip() == "from-dotenv"
+    assert out.stdout.strip() == "from-dotenv-0123456789"
 
 
 @pytest.mark.parametrize(
@@ -78,3 +78,15 @@ def test_parse_origins(raw, expected):
 )
 def test_normalize_database_url(url, expected):
     assert normalize_database_url(url) == expected
+
+
+@pytest.mark.parametrize("key", ["change-me", "short-key", "x" * 15])
+def test_placeholder_or_short_secret_key_is_refused(monkeypatch, key):
+    monkeypatch.setenv("SECRET_KEY", key)
+    with pytest.raises(RuntimeError, match="SECRET_KEY"):
+        create_app()
+
+
+def test_16_character_secret_key_is_accepted(monkeypatch):
+    monkeypatch.setenv("SECRET_KEY", "x" * 16)
+    create_app()

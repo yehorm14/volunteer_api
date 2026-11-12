@@ -41,7 +41,7 @@ def categorize_task_with_ai(
 
 @router.post("/extract", response_model=schemas.Task, status_code=status.HTTP_201_CREATED)
 async def extract_task_from_notes(
-    notes: str,
+    payload: schemas.ExtractRequest,
     current_user: CurrentUser,
     db: DB,
     aclient: Annotated[AsyncOpenAI, Depends(get_async_openai_client)],
@@ -58,7 +58,7 @@ async def extract_task_from_notes(
                         "role": "system",
                         "content": "You are a professional secretary. Extract a volunteer task from the notes. Keep the title concise.",
                     },
-                    {"role": "user", "content": notes},
+                    {"role": "user", "content": payload.notes},
                 ],
                 response_format=schemas.ParsedTask,
                 timeout=15.0,

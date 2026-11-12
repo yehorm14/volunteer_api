@@ -27,7 +27,7 @@ def test_categorize_returns_503_without_key(client, auth_headers, task_id):
 
 
 def test_extract_returns_503_without_key(client, auth_headers):
-    r = client.post("/tasks/extract", params={"notes": "call shelter"}, headers=auth_headers)
+    r = client.post("/tasks/extract", json={"notes": "call shelter"}, headers=auth_headers)
     assert r.status_code == 503
     assert r.json()["detail"] == AI_DISABLED_DETAIL
 
@@ -62,7 +62,7 @@ def test_extract_with_mocked_client_creates_task(client, auth_headers):
     )
     client.app.dependency_overrides[get_async_openai_client] = lambda: fake
 
-    r = client.post("/tasks/extract", params={"notes": "call shelter re food, tues"}, headers=auth_headers)
+    r = client.post("/tasks/extract", json={"notes": "call shelter re food, tues"}, headers=auth_headers)
 
     assert r.status_code == 201
     body = r.json()
@@ -82,7 +82,7 @@ def test_extract_refusal_returns_400(client, auth_headers):
     )
     client.app.dependency_overrides[get_async_openai_client] = lambda: fake
 
-    r = client.post("/tasks/extract", params={"notes": "x"}, headers=auth_headers)
+    r = client.post("/tasks/extract", json={"notes": "x"}, headers=auth_headers)
     assert r.status_code == 400
 
 
@@ -124,7 +124,19 @@ def test_extract_provider_errors_are_503_and_generic(client, auth_headers, monke
     fake.beta.chat.completions.parse = AsyncMock(side_effect=exc)
     client.app.dependency_overrides[get_async_openai_client] = lambda: fake
 
-    r = client.post("/tasks/extract", params={"notes": "x"}, headers=auth_headers)
+    r = client.post("/tasks/extract", json={"notes": "x"}, headers=auth_headers)
 
     assert r.status_code == 503
     assert SECRET_TEXT not in r.text
+
+
+def test_extract_requires_json_body_not_query_param(client, auth_headers):
+    client.app.dependency_overrides[get_async_openai_client] = lambda: MagicMock()
+    r = client.post("/tasks/extract", params={"notes": "private notes"}, headers=auth_headers)
+    assert r.status_code == 422
+
+
+def test_extract_rejects_empty_notes(client, auth_headers):
+    client.app.dependency_overrides[get_async_openai_client] = lambda: MagicMock()
+    r = client.post("/tasks/extract", json={"notes": ""}, headers=auth_headers)
+    assert r.status_code == 422

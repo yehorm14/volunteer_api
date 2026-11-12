@@ -6,8 +6,9 @@ Backend variables go in a `.env` file at the repo root (see `.env.example`). The
 
 | Variable | Required | Default |
 | :--- | :--- | :--- |
-| `SECRET_KEY` | yes | none; the API refuses to start without it |
+| `SECRET_KEY` | yes | none; the API refuses to start without it, or with `change-me` or a key under 16 characters |
 | `OPENAI_API_KEY` | no | AI endpoints return 503 |
+| `DEMO_USER_EMAIL`, `DEMO_USER_PASSWORD` | no | unset; when both are set, a demo user with sample tasks is created at startup (password at least 8 characters) |
 | `DATABASE_URL` | no | SQLite file at `backend/volunteer.db`; `postgres://` and `postgresql://` URLs work |
 | `CORS_ORIGINS` | no | local dev origins (`localhost:5173`, `localhost:3000`); comma-separated, trailing slashes are ignored |
 | `VITE_API_URL` | production builds (frontend) | `/api` (Vite proxy) in dev only; a production build without it shows a configuration error |

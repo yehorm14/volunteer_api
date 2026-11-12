@@ -1,10 +1,10 @@
-from jose import jwt
+import jwt
 
 from backend import auth
 
 
 def test_register_returns_user_without_password(client):
-    r = client.post("/auth/register", json={"email": "a@example.com", "password": "pw12345"})
+    r = client.post("/auth/register", json={"email": "a@example.com", "password": "pw123456"})
     assert r.status_code == 201
     body = r.json()
     assert body["email"] == "a@example.com"
@@ -13,15 +13,15 @@ def test_register_returns_user_without_password(client):
 
 
 def test_register_duplicate_email_rejected(client):
-    payload = {"email": "a@example.com", "password": "pw12345"}
+    payload = {"email": "a@example.com", "password": "pw123456"}
     assert client.post("/auth/register", json=payload).status_code == 201
     r = client.post("/auth/register", json=payload)
     assert r.status_code == 400
 
 
 def test_login_returns_valid_jwt(client):
-    client.post("/auth/register", json={"email": "a@example.com", "password": "pw12345"})
-    r = client.post("/auth/login", data={"username": "a@example.com", "password": "pw12345"})
+    client.post("/auth/register", json={"email": "a@example.com", "password": "pw123456"})
+    r = client.post("/auth/login", data={"username": "a@example.com", "password": "pw123456"})
     assert r.status_code == 200
     body = r.json()
     assert body["token_type"] == "bearer"
@@ -30,7 +30,7 @@ def test_login_returns_valid_jwt(client):
 
 
 def test_login_wrong_password(client):
-    client.post("/auth/register", json={"email": "a@example.com", "password": "pw12345"})
+    client.post("/auth/register", json={"email": "a@example.com", "password": "pw123456"})
     r = client.post("/auth/login", data={"username": "a@example.com", "password": "wrong"})
     assert r.status_code == 401
 
@@ -47,7 +47,7 @@ def test_protected_routes_require_token(client):
     assert client.patch("/tasks/1", json={"title": "x"}).status_code == 401
     assert client.delete("/tasks/1").status_code == 401
     assert client.post("/tasks/1/ai-categorize").status_code == 401
-    assert client.post("/tasks/extract", params={"notes": "x"}).status_code == 401
+    assert client.post("/tasks/extract", json={"notes": "x"}).status_code == 401
 
 
 def test_invalid_token_rejected(client):
@@ -78,6 +78,17 @@ def test_register_accepts_72_byte_password(client):
 
 
 def test_login_with_over_long_password_is_401_not_500(client):
-    client.post("/auth/register", json={"email": "a@example.com", "password": "pw12345"})
+    client.post("/auth/register", json={"email": "a@example.com", "password": "pw123456"})
     r = client.post("/auth/login", data={"username": "a@example.com", "password": "x" * 100})
     assert r.status_code == 401
+
+
+def test_register_rejects_short_password(client):
+    r = client.post("/auth/register", json={"email": "a@example.com", "password": "x" * 7})
+    assert r.status_code == 422
+    assert "at least 8" in r.text
+
+
+def test_register_accepts_8_character_password(client):
+    r = client.post("/auth/register", json={"email": "a@example.com", "password": "x" * 8})
+    assert r.status_code == 201

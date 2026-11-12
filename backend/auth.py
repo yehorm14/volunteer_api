@@ -5,7 +5,7 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+import jwt
 from sqlalchemy.orm import Session
 
 from . import models
@@ -13,6 +13,10 @@ from .database import get_db
 
 # bcrypt only uses the first 72 bytes and bcrypt 5 raises on longer input.
 MAX_PASSWORD_BYTES = 72
+
+# The value shipped in .env.example, and the shortest key accepted at startup.
+PLACEHOLDER_SECRET_KEY = "change-me"
+MIN_SECRET_KEY_LENGTH = 16
 
 
 def get_secret_key() -> str:
@@ -22,6 +26,11 @@ def get_secret_key() -> str:
         raise RuntimeError(
             "SECRET_KEY environment variable is not set. "
             'Generate one with: python -c "import secrets; print(secrets.token_urlsafe(32))"'
+        )
+    if key == PLACEHOLDER_SECRET_KEY or len(key) < MIN_SECRET_KEY_LENGTH:
+        raise RuntimeError(
+            f"SECRET_KEY is the placeholder value or shorter than {MIN_SECRET_KEY_LENGTH} characters. "
+            'Generate a real one with: python -c "import secrets; print(secrets.token_urlsafe(32))"'
         )
     return key
 
@@ -75,7 +84,7 @@ def get_current_user(
         email: str | None = payload.get("sub")
         if email is None:
             raise credentials_exception
-    except JWTError:
+    except jwt.PyJWTError:
         raise credentials_exception
     
     # Check the database to make sure the user actually exists

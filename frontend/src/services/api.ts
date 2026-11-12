@@ -105,10 +105,8 @@ export async function categorizeTask(id: number): Promise<AICategorizeResponse> 
   return res.data
 }
 
-// Backend receives `notes` as a query param (bare string = query param in FastAPI)
+// Notes go in the JSON body so they never appear in URLs or server logs
 export async function extractTaskFromNotes(notes: string): Promise<Task> {
-  const res = await api.post<Task>('/tasks/extract', null, {
-    params: { notes },
-  })
+  const res = await api.post<Task>('/tasks/extract', { notes })
   return res.data
 }

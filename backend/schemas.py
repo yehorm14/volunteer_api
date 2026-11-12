@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 # Task Schemas
 class TaskBase(BaseModel):
@@ -24,8 +24,11 @@ class Task(TaskBase):
 class UserBase(BaseModel):
     email: str
 
+MIN_PASSWORD_LENGTH = 8
+
+
 class UserCreate(UserBase):
-    password: str
+    password: str = Field(min_length=MIN_PASSWORD_LENGTH)
 
     @field_validator("password")
     @classmethod
@@ -49,6 +52,10 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     email: str | None = None
+
+class ExtractRequest(BaseModel):
+    notes: str = Field(min_length=1, max_length=10_000)
+
 
 class ParsedTask(BaseModel):
     title: str

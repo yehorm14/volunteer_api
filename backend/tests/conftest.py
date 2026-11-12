@@ -3,7 +3,7 @@ import tempfile
 
 # Set the environment BEFORE importing the app. Tests never read a developer's .env:
 # only the real entry point (backend.main.app) loads it.
-os.environ["SECRET_KEY"] = "test-secret-key"
+os.environ["SECRET_KEY"] = "test-secret-key-for-pytest-only-0123456789"
 os.environ["DATABASE_URL"] = f"sqlite:///{tempfile.mkdtemp()}/test.db"
 os.environ.pop("OPENAI_API_KEY", None)
 
@@ -44,7 +44,7 @@ def client():
     Base.metadata.drop_all(bind=engine)
 
 
-def register_and_login(client: TestClient, email: str, password: str = "pw12345") -> dict:
+def register_and_login(client: TestClient, email: str, password: str = "pw123456") -> dict:
     r = client.post("/auth/register", json={"email": email, "password": password})
     assert r.status_code == 201, r.text
     r = client.post("/auth/login", data={"username": email, "password": password})
