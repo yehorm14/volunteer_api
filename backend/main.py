@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import auth
 from .database import init_db
+from .seed_demo import seed_demo_from_env
 from .routers import ai, auth as auth_router, tasks
 
 DEFAULT_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000"
@@ -21,6 +22,7 @@ def parse_origins(raw: str | None) -> list[str]:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
+    seed_demo_from_env()
     yield
 
 
