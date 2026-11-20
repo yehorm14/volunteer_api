@@ -1,6 +1,6 @@
 # Volunteer Task Manager
 
-[![CI](https://github.com/yehorm14/volunteer-task-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/yehorm14/volunteer-task-manager/actions/workflows/ci.yml)
+[![CI](https://github.com/yehorm14/volunteer_api/actions/workflows/ci.yml/badge.svg)](https://github.com/yehorm14/volunteer_api/actions/workflows/ci.yml)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-green.svg)](LICENSE)
 ![Python 3.13](https://img.shields.io/badge/python-3.13-blue?logo=python&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript&logoColor=white)
