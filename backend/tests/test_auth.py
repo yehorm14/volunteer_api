@@ -92,3 +92,30 @@ def test_register_rejects_short_password(client):
 def test_register_accepts_8_character_password(client):
     r = client.post("/auth/register", json={"email": "a@example.com", "password": "x" * 8})
     assert r.status_code == 201
+
+
+def test_register_invalid_email_rejected(client):
+    for bad in ["not-an-email", "a@", "@example.com", "a b@example.com", ""]:
+        r = client.post("/auth/register", json={"email": bad, "password": "pw123456"})
+        assert r.status_code == 422, bad
+
+
+def test_register_stores_lower_case_email(client):
+    r = client.post("/auth/register", json={"email": "  Mixed.Case@Example.COM ", "password": "pw123456"})
+    assert r.status_code == 201
+    assert r.json()["email"] == "mixed.case@example.com"
+
+
+def test_register_mixed_case_duplicate_rejected(client):
+    assert client.post("/auth/register", json={"email": "a@example.com", "password": "pw123456"}).status_code == 201
+    r = client.post("/auth/register", json={"email": "A@Example.com", "password": "pw123456"})
+    assert r.status_code == 400
+
+
+def test_login_is_case_insensitive(client):
+    client.post("/auth/register", json={"email": "Vol@Example.com", "password": "pw123456"})
+    for username in ["vol@example.com", "VOL@EXAMPLE.COM", "Vol@Example.com"]:
+        r = client.post("/auth/login", data={"username": username, "password": "pw123456"})
+        assert r.status_code == 200, username
+        token = r.json()["access_token"]
+        assert client.get("/tasks", headers={"Authorization": f"Bearer {token}"}).status_code == 200

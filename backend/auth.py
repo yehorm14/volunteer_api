@@ -97,7 +97,7 @@ def get_current_user(
         raise credentials_exception
     
     # Check the database to make sure the user actually exists
-    user = db.query(models.User).filter(models.User.email == email).first()
+    user = db.query(models.User).filter(models.User.email == email.strip().lower()).first()
     if user is None:
         raise credentials_exception
         

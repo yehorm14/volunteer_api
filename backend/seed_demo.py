@@ -25,6 +25,7 @@ def seed_demo(db: Session, email: str, password: str) -> bool:
     """Create the demo user and sample tasks if the user does not exist. Returns True if anything was created."""
     if len(password) < schemas.MIN_PASSWORD_LENGTH:
         raise ValueError(f"Demo password must be at least {schemas.MIN_PASSWORD_LENGTH} characters.")
+    email = schemas.normalize_email(email)
     if db.query(models.User).filter(models.User.email == email).first():
         return False
     user = models.User(email=email, hashed_password=auth.get_password_hash(password))

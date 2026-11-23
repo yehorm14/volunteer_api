@@ -1,8 +1,12 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from .task_status import DEFAULT_STATUS, TaskStatus
 
 MAX_TITLE_LENGTH = 200
+
+
+def normalize_email(email: str) -> str:
+    return email.strip().lower()
 
 
 def _clean_title(v: str) -> str:
@@ -60,7 +64,13 @@ class Task(BaseModel):
 
 # User Schemas
 class UserBase(BaseModel):
-    email: str
+    email: EmailStr
+
+    @field_validator("email", mode="after")
+    @classmethod
+    def lower_case_email(cls, v: str) -> str:
+        # Accounts are case-insensitive: A@x.com and a@x.com are the same account.
+        return normalize_email(v)
 
 MIN_PASSWORD_LENGTH = 8
 

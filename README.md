@@ -17,7 +17,7 @@ A task manager for volunteer coordinators, with optional GPT-4o-mini helpers for
 
 ## Features
 
-- Register and log in with email and password (at least 8 characters, bcrypt hashes, JWT bearer tokens).
+- Register and log in with email and password (at least 8 characters, bcrypt hashes, JWT bearer tokens). Emails are validated and stored lower-case, so login ignores case and `A@x.com` and `a@x.com` are one account.
 - Create, view, edit and delete tasks with `pending`, `in_progress` and `completed` status (the API rejects anything else; sending `description: null` clears the description).
 - Dashboard with status counts, filter tabs and optimistic updates that roll back on failure.
 - Ownership checks on every task route; another user's task returns 404.
@@ -136,3 +136,7 @@ Vitest, Testing Library and msw run the real app in jsdom against an in-memory f
 ## Licence
 
 MIT. See [LICENSE](LICENSE).
+
+## Upgrading: case-duplicate emails (migration 0004)
+
+Migration 0004 lower-cases every stored email and adds a unique index on `lower(email)`. If an existing database holds accounts that differ only by case, the oldest one (lowest id) keeps the plain lower-cased address. Each other one is deactivated and renamed to `<local>+duplicate-<id>@<domain>`; it keeps its tasks and password, nothing is deleted, and each rename is logged as a warning during the migration. Review those accounts afterwards and merge or remove them by hand. Downgrading drops the index but does not restore the original casing.

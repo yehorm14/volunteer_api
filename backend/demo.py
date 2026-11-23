@@ -17,7 +17,7 @@ def _truthy(value: str | None) -> bool:
 
 
 def demo_email() -> str:
-    return os.getenv("DEMO_USER_EMAIL", "").strip()
+    return os.getenv("DEMO_USER_EMAIL", "").strip().lower()
 
 
 def is_public_demo_enabled() -> bool:
