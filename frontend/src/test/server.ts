@@ -41,7 +41,12 @@ export const handlers = [
     return HttpResponse.json({ access_token: fakeToken(form.get('username') ?? ''), token_type: 'bearer' })
   }),
 
-  http.get(`${API}/tasks`, () => HttpResponse.json(db.tasks)),
+  http.get(`${API}/tasks`, ({ request }) => {
+    const url = new URL(request.url)
+    const offset = Number(url.searchParams.get('offset') ?? 0)
+    const limit = Number(url.searchParams.get('limit') ?? 100)
+    return HttpResponse.json(db.tasks.slice(offset, offset + limit))
+  }),
 
   http.post(`${API}/tasks`, async ({ request }) => {
     const body = (await request.json()) as Partial<Task>

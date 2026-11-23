@@ -1,7 +1,10 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Query, status
 
 from .. import schemas, models
 from ..deps import DB, CurrentUser, WritableUser, get_owned_task
+
+DEFAULT_TASK_LIMIT = 100
+MAX_TASK_LIMIT = 500
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -16,8 +19,20 @@ def create_task(task_in: schemas.TaskCreate, current_user: WritableUser, db: DB)
 
 
 @router.get("", response_model=list[schemas.Task])
-def read_tasks(current_user: CurrentUser, db: DB):
-    return db.query(models.Task).filter(models.Task.owner_id == current_user.id).all()
+def read_tasks(
+    current_user: CurrentUser,
+    db: DB,
+    limit: int = Query(DEFAULT_TASK_LIMIT, ge=1, le=MAX_TASK_LIMIT),
+    offset: int = Query(0, ge=0),
+):
+    return (
+        db.query(models.Task)
+        .filter(models.Task.owner_id == current_user.id)
+        .order_by(models.Task.id)
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
 
 
 @router.get("/{task_id}", response_model=schemas.Task)

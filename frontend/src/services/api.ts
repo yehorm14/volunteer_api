@@ -86,9 +86,18 @@ export async function loginDemo(): Promise<TokenResponse> {
 
 // ── Tasks ────────────────────────────────────────────────────
 
+// The API pages GET /tasks (default 100, max 500); fetch every page so the UI still shows all tasks.
+export const TASK_PAGE_SIZE = 100
+
 export async function getTasks(): Promise<Task[]> {
-  const res = await api.get<Task[]>('/tasks')
-  return res.data
+  const all: Task[] = []
+  for (;;) {
+    const res = await api.get<Task[]>('/tasks', {
+      params: { limit: TASK_PAGE_SIZE, offset: all.length },
+    })
+    all.push(...res.data)
+    if (res.data.length < TASK_PAGE_SIZE) return all
+  }
 }
 
 export async function getTask(id: number): Promise<Task> {
