@@ -46,15 +46,29 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+// Wrapped so tests can observe the full-page redirect that jsdom cannot perform.
+export const navigation = {
+  toLogin: () => {
+    window.location.href = '/login'
+  },
+}
+
 // ── Response interceptor: handle 401 ────────────────────────
 
 api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
-    if (error.response?.status === 401) {
+    // A 401 from the auth endpoints (wrong password) is feedback for the form, not an expired session.
+    // Only a rejected request that carried a stored token ends the session and redirects.
+    const url = error.config?.url ?? ''
+    const isAuthRequest = url.startsWith('/auth/')
+    if (error.response?.status === 401 && !isAuthRequest) {
+      const hadSession = localStorage.getItem('access_token') !== null
       localStorage.removeItem('access_token')
       localStorage.removeItem(DEMO_SESSION_KEY)
-      window.location.href = '/login'
+      if (hadSession && window.location.pathname !== '/login') {
+        navigation.toLogin()
+      }
     }
     return Promise.reject(error)
   }
