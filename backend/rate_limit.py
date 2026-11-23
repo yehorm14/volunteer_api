@@ -8,7 +8,7 @@ import math
 import os
 import threading
 import time
-from collections import defaultdict, deque
+from collections import OrderedDict, deque
 
 from fastapi import HTTPException, Request, status
 
@@ -18,8 +18,13 @@ DEFAULT_AUTH_RATE_WINDOW_SECONDS = 60
 # Replaced in tests with a fake clock; must return seconds as a float.
 clock = time.monotonic
 
+# Hard cap on tracked (route, IP) keys, so a flood of distinct addresses cannot grow memory without bound.
+MAX_TRACKED_KEYS = 10_000
+
 _lock = threading.Lock()
-_hits: dict[tuple[str, str], deque[float]] = defaultdict(deque)
+# Ordered least- to most-recently seen; the oldest keys are evicted once MAX_TRACKED_KEYS is exceeded.
+_hits: "OrderedDict[tuple[str, str], deque[float]]" = OrderedDict()
+_last_prune = 0.0
 
 
 def _env_positive_int(name: str, default: int) -> int:
@@ -37,8 +42,10 @@ def _env_positive_int(name: str, default: int) -> int:
 
 def reset() -> None:
     """Forget all counters (used by the test suite between tests)."""
+    global _last_prune
     with _lock:
         _hits.clear()
+        _last_prune = 0.0
 
 
 def client_ip(request: Request) -> str:
@@ -62,10 +69,19 @@ def limit_auth_attempts(request: Request) -> None:
     """Dependency: 429 once one IP exceeds the allowed attempts per window on this route."""
     limit = _env_positive_int("AUTH_RATE_LIMIT", DEFAULT_AUTH_RATE_LIMIT)
     window = _env_positive_int("AUTH_RATE_WINDOW_SECONDS", DEFAULT_AUTH_RATE_WINDOW_SECONDS)
+    global _last_prune
     key = (request.url.path, client_ip(request))
     now = clock()
     with _lock:
-        hits = _hits[key]
+        if now - _last_prune >= window or now < _last_prune:  # at most once per window, not per request
+            _last_prune = now
+            for k in [k for k, v in _hits.items() if not v or v[-1] <= now - window]:
+                del _hits[k]
+        hits = _hits.get(key)
+        if hits is None:
+            hits = _hits[key] = deque()
+        else:
+            _hits.move_to_end(key)
         while hits and hits[0] <= now - window:
             hits.popleft()
         if len(hits) >= limit:
@@ -76,6 +92,5 @@ def limit_auth_attempts(request: Request) -> None:
                 headers={"Retry-After": str(retry_after)},
             )
         hits.append(now)
-        if len(_hits) > 10_000:  # bound memory: drop keys whose window has fully passed
-            for k in [k for k, v in _hits.items() if not v or v[-1] <= now - window]:
-                del _hits[k]
+        while len(_hits) > MAX_TRACKED_KEYS:
+            _hits.popitem(last=False)

@@ -85,6 +85,20 @@ def test_trusted_proxy_hops_picks_the_entry_from_the_right(client, fake_clock, m
     assert _login(client, {"X-Forwarded-For": "198.51.100.7, 192.0.2.250"}).status_code == 429
 
 
+def test_tracked_ips_are_capped_and_expired_keys_pruned(client, fake_clock, monkeypatch):
+    from backend import rate_limit
+
+    monkeypatch.setattr(rate_limit, "MAX_TRACKED_KEYS", 5)
+    monkeypatch.setenv("TRUST_PROXY_HEADERS", "1")
+    for i in range(20):
+        _login(client, {"X-Forwarded-For": f"198.51.100.{i}"})
+    assert len(rate_limit._hits) == 5  # least recently seen evicted
+    assert ("/auth/login", "198.51.100.19") in rate_limit._hits
+    fake_clock.advance(61)
+    _login(client, {"X-Forwarded-For": "203.0.113.1"})
+    assert list(rate_limit._hits) == [("/auth/login", "203.0.113.1")]  # expired keys dropped
+
+
 # --- AI quota ---------------------------------------------------------------------------------
 
 @pytest.fixture()
