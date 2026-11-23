@@ -101,7 +101,7 @@ The user is created at startup, or on demand with `python -m backend.seed_demo`.
 
 ## Tests
 
-56 backend tests, run with `python -m pytest` from the repo root. They use an in-memory SQLite database per test and never read `.env`. They cover:
+91 backend tests, run with `python -m pytest` from the repo root. They use an in-memory SQLite database per test and never read `.env`. They cover:
 
 - Auth: registration, duplicate emails, password length rules (8 characters minimum, 72 bytes maximum), login, JWT validity, rejected tokens.
 - Tasks: create, list, update and delete, plus ownership checks (another user gets 404) and auth required on every route.
