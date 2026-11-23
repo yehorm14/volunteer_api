@@ -123,3 +123,27 @@ def test_patch_empty_body_changes_nothing(client, auth_headers):
     task = make_task(client, auth_headers)
     r = client.patch(f"/tasks/{task['id']}", json={}, headers=auth_headers)
     assert r.status_code == 200 and r.json() == task
+
+
+def test_list_tasks_limit_and_offset(client, auth_headers):
+    for i in range(5):
+        make_task(client, auth_headers, title=f"t{i}")
+    r = client.get("/tasks?limit=2", headers=auth_headers)
+    assert [t["title"] for t in r.json()] == ["t0", "t1"]
+    r = client.get("/tasks?limit=2&offset=4", headers=auth_headers)
+    assert [t["title"] for t in r.json()] == ["t4"]
+    assert len(client.get("/tasks", headers=auth_headers).json()) == 5
+
+
+def test_list_tasks_rejects_bad_paging(client, auth_headers):
+    for q in ("limit=0", "limit=501", "offset=-1"):
+        assert client.get(f"/tasks?{q}", headers=auth_headers).status_code == 422
+
+
+def test_description_length_capped(client, auth_headers):
+    ok = client.post("/tasks", json={"title": "x", "description": "a" * 5000}, headers=auth_headers)
+    assert ok.status_code == 201
+    r = client.post("/tasks", json={"title": "x", "description": "a" * 5001}, headers=auth_headers)
+    assert r.status_code == 422
+    r = client.patch(f"/tasks/{ok.json()['id']}", json={"description": "a" * 5001}, headers=auth_headers)
+    assert r.status_code == 422
