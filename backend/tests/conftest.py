@@ -13,8 +13,50 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from backend import rate_limit
 from backend.database import Base, get_db
 from backend.main import create_app
+
+
+@pytest.fixture(autouse=True)
+def _fresh_rate_limits(monkeypatch):
+    """Every test starts with empty per-IP counters and the proxy/limit env at its defaults."""
+    for name in ("AUTH_RATE_LIMIT", "AUTH_RATE_WINDOW_SECONDS", "TRUST_PROXY_HEADERS", "TRUSTED_PROXY_HOPS", "AI_DAILY_LIMIT"):
+        monkeypatch.delenv(name, raising=False)
+    rate_limit.reset()
+    yield
+    rate_limit.reset()
+
+
+class FakeClock:
+    """Stands in for rate_limit.clock (seconds) and ai_quota.utc_now (datetime)."""
+
+    def __init__(self):
+        from datetime import datetime, timezone
+
+        self.seconds = 1000.0
+        self.start = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
+
+    def advance(self, seconds: float) -> None:
+        self.seconds += seconds
+
+    def monotonic(self) -> float:
+        return self.seconds
+
+    def now(self):
+        from datetime import timedelta
+
+        return self.start + timedelta(seconds=self.seconds - 1000.0)
+
+
+@pytest.fixture()
+def fake_clock(monkeypatch):
+    from backend import ai_quota
+
+    clock = FakeClock()
+    monkeypatch.setattr(rate_limit, "clock", clock.monotonic)
+    monkeypatch.setattr(ai_quota, "utc_now", clock.now)
+    return clock
 
 
 @pytest.fixture()

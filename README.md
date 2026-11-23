@@ -24,6 +24,7 @@ A task manager for volunteer coordinators, with optional GPT-4o-mini helpers for
 - AI categorise: one-word category and short explanation for a task.
 - AI extract: saves a task parsed from free-text notes using structured output.
 - AI is optional: the AI features are off without `OPENAI_API_KEY`; those two endpoints return 503 and the UI shows a notice. Everything else works.
+- Abuse limits: `/auth/login` and `/auth/register` allow 5 requests per minute per IP (429 after that), and each user gets 20 AI calls per UTC day across both AI endpoints (429 after that, counted in the database). Both are configurable; see `AUTH_RATE_LIMIT`, `AI_DAILY_LIMIT` and `TRUST_PROXY_HEADERS` in [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ## How it works
 
@@ -105,11 +106,12 @@ The user is created at startup, or on demand with `python -m backend.seed_demo`.
 
 ## Tests
 
-91 backend tests, run with `python -m pytest` from the repo root. They use an in-memory SQLite database per test and never read `.env`. They cover:
+Backend tests (124), run with `python -m pytest` from the repo root. They use an in-memory SQLite database per test and never read `.env`. They cover:
 
 - Auth: registration, duplicate emails, password length rules (8 characters minimum, 72 bytes maximum), login, JWT validity, rejected tokens.
 - Tasks: create, list, update and delete, plus ownership checks (another user gets 404) and auth required on every route.
 - AI endpoints: 503 without a key, categorise and extract with a mocked OpenAI client, refusals, retries and provider errors.
+- Rate limits: the 6th login in a minute and the 21st AI call in a day answer 429, windows and UTC day rollover use a fake clock, proxy IP handling, shared and per-user quota.
 - Config: `SECRET_KEY` validation, `.env` loading only from the real entry point, CORS origin parsing, database URL normalisation.
 - Demo seeding: creation, idempotency and startup seeding.
 - Public sample workspace: off by default, passwordless token, three statuses visible, every write and both AI endpoints answer 403, real accounts unaffected.
