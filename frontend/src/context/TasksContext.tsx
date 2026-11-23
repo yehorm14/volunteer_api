@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import * as api from '../services/api'
 import type { Task, TaskCreate, TaskUpdate } from '../types'
@@ -16,21 +16,44 @@ interface TasksContextValue {
 const TasksContext = createContext<TasksContextValue | null>(null)
 
 export function TasksProvider({ children }: { children: ReactNode }) {
-  const [tasks, setTasks] = useState<Task[]>([])
+  const [tasks, setTasksState] = useState<Task[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // The ref is the source of truth for the current list so that rollbacks and
+  // overlapping requests never work from a stale render closure.
+  const tasksRef = useRef<Task[]>([])
+  const latestFetch = useRef(0)
+  const mutations = useRef(0)
+
+  function commit(updater: (prev: Task[]) => Task[]) {
+    tasksRef.current = updater(tasksRef.current)
+    setTasksState(tasksRef.current)
+  }
+
   async function fetchTasks() {
+    const requestId = ++latestFetch.current
     setIsLoading(true)
     setError(null)
-    try {
-      const data = await api.getTasks()
-      setTasks(data)
-    } catch {
-      setError('Failed to load tasks')
-    } finally {
-      setIsLoading(false)
+    const maxAttempts = 3
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const mutationsAtStart = mutations.current
+      try {
+        const data = await api.getTasks()
+        // A newer fetch has started: this response is stale, drop it.
+        if (requestId !== latestFetch.current) return
+        // The list was read before a create/edit/delete finished, so it may
+        // not include that change: read it again instead of showing old data.
+        if (mutations.current !== mutationsAtStart && attempt < maxAttempts) continue
+        commit(() => data)
+        break
+      } catch {
+        if (requestId !== latestFetch.current) return
+        setError('Failed to load tasks')
+        break
+      }
     }
+    setIsLoading(false)
   }
 
   useEffect(() => {
@@ -39,42 +62,65 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   }, [])
 
   async function addTask(data: TaskCreate): Promise<Task> {
-    const task = await api.createTask(data)
-    setTasks((prev) => [task, ...prev])
-    return task
+    mutations.current++
+    try {
+      const task = await api.createTask(data)
+      commit((prev) => [task, ...prev])
+      return task
+    } finally {
+      mutations.current++
+    }
   }
 
   async function editTask(id: number, data: TaskUpdate): Promise<Task> {
-    const previous = tasks.find((t) => t.id === id)
+    mutations.current++
+    const before = tasksRef.current.find((t) => t.id === id)
     // Optimistic update
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, ...data } : t))
-    )
+    commit((prev) => prev.map((t) => (t.id === id ? { ...t, ...data } : t)))
     try {
       const updated = await api.updateTask(id, data)
-      setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)))
+      commit((prev) => prev.map((t) => (t.id === id ? updated : t)))
       return updated
     } catch (err) {
-      // Rollback on failure
-      if (previous) {
-        setTasks((prev) => prev.map((t) => (t.id === id ? previous : t)))
+      // Roll back only the fields this edit changed, and only if nothing else has
+      // changed them since, so a concurrent successful edit is not undone.
+      if (before) {
+        commit((prev) =>
+          prev.map((t) => {
+            if (t.id !== id) return t
+            const restored: Task = { ...t }
+            for (const key of Object.keys(data) as (keyof TaskUpdate)[]) {
+              if (t[key] === data[key]) {
+                ;(restored as unknown as Record<string, unknown>)[key] = before[key]
+              }
+            }
+            return restored
+          })
+        )
       }
       throw err
+    } finally {
+      mutations.current++
     }
   }
 
   async function removeTask(id: number): Promise<void> {
-    const previous = tasks.find((t) => t.id === id)
+    mutations.current++
+    const before = tasksRef.current.find((t) => t.id === id)
     // Optimistic removal
-    setTasks((prev) => prev.filter((t) => t.id !== id))
+    commit((prev) => prev.filter((t) => t.id !== id))
     try {
       await api.deleteTask(id)
     } catch (err) {
-      // Rollback on failure
-      if (previous) {
-        setTasks((prev) => [...prev, previous].sort((a, b) => a.id - b.id))
+      // Put the task back (unless a refetch already did)
+      if (before) {
+        commit((prev) =>
+          prev.some((t) => t.id === id) ? prev : [...prev, before].sort((a, b) => a.id - b.id)
+        )
       }
       throw err
+    } finally {
+      mutations.current++
     }
   }
 
