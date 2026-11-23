@@ -1,6 +1,7 @@
 import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import Button from '../components/ui/Button'
+import DemoButton from '../components/auth/DemoButton'
 
 const features = [
   {
@@ -62,6 +63,9 @@ export default function Landing() {
                 Sign in
               </Button>
             </Link>
+          </div>
+          <div className="mt-6 flex justify-center">
+            <DemoButton />
           </div>
         </div>
 

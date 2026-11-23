@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import type { Task, TaskFormValues } from '../types'
 import * as api from '../services/api'
 import { useTasks } from '../hooks/useTasks'
+import { useAuth } from '../hooks/useAuth'
 import TaskStatusBadge from '../components/tasks/TaskStatusBadge'
 import TaskForm from '../components/tasks/TaskForm'
 import AIPanel from '../components/tasks/AIPanel'
@@ -15,6 +16,7 @@ export default function TaskDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { editTask, removeTask } = useTasks()
+  const { isDemo } = useAuth()
 
   const [task, setTask] = useState<Task | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -126,47 +128,55 @@ export default function TaskDetail() {
             <p className="text-slate-500 text-sm italic mb-6">No description</p>
           )}
 
-          <div className="flex items-center gap-3 pt-4 border-t border-slate-800">
-            <Button onClick={() => { setSaveError(null); setIsEditing(true) }} variant="secondary" size="sm">
-              Edit
-            </Button>
+          {!isDemo && (
+            <div className="flex items-center gap-3 pt-4 border-t border-slate-800">
+              <Button onClick={() => { setSaveError(null); setIsEditing(true) }} variant="secondary" size="sm">
+                Edit
+              </Button>
 
-            {deleteConfirm ? (
-              <div className="flex items-center gap-2 ml-auto">
-                <span className="text-sm text-slate-400">Delete this task?</span>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  isLoading={isDeleting}
-                  onClick={handleDelete}
-                >
-                  Confirm
-                </Button>
+              {deleteConfirm ? (
+                <div className="flex items-center gap-2 ml-auto">
+                  <span className="text-sm text-slate-400">Delete this task?</span>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    isLoading={isDeleting}
+                    onClick={handleDelete}
+                  >
+                    Confirm
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setDeleteConfirm(false)}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setDeleteConfirm(false)}
+                  onClick={() => setDeleteConfirm(true)}
+                  className="ml-auto text-red-400 hover:text-red-300"
                 >
-                  Cancel
+                  Delete
                 </Button>
-              </div>
-            ) : (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setDeleteConfirm(true)}
-                className="ml-auto text-red-400 hover:text-red-300"
-              >
-                Delete
-              </Button>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
       {/* AI Panel */}
       <div className="mt-6">
-        <AIPanel taskId={task.id} taskTitle={task.title} />
+        {isDemo ? (
+          <p role="status" className="text-sm text-slate-500">
+            AI tools and editing are turned off in the read-only sample workspace.
+          </p>
+        ) : (
+          <AIPanel taskId={task.id} taskTitle={task.title} />
+        )}
       </div>
     </div>
   )

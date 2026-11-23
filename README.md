@@ -88,6 +88,10 @@ cd frontend && npm ci && npm run dev
 
 Open `http://localhost:5173`. The API runs on port 8000 with docs at `/docs`. Data is stored in `backend/volunteer.db`. Environment variables and deployment are in [docs/DEPLOY.md](docs/DEPLOY.md).
 
+### Sample workspace (read-only, optional)
+
+A deployment can offer a "Try the sample workspace" button: visitors see the three made-up sample tasks in all three statuses without an account, real notes or AI credentials, and cannot change anything. It is off unless you set `DEMO_USER_EMAIL` and `DEMO_PUBLIC=1` on the API and build the frontend with `VITE_DEMO_ENABLED=true`; see [Public sample workspace](docs/DEPLOY.md#public-sample-workspace). No public demo URL is published yet.
+
 ### Demo account (optional)
 
 To get a ready-made login with a few sample tasks, set both variables in `.env`:
@@ -108,6 +112,7 @@ The user is created at startup, or on demand with `python -m backend.seed_demo`.
 - AI endpoints: 503 without a key, categorise and extract with a mocked OpenAI client, refusals, retries and provider errors.
 - Config: `SECRET_KEY` validation, `.env` loading only from the real entry point, CORS origin parsing, database URL normalisation.
 - Demo seeding: creation, idempotency and startup seeding.
+- Public sample workspace: off by default, passwordless token, three statuses visible, every write and both AI endpoints answer 403, real accounts unaffected.
 
 The migration tests run on SQLite by default; set `TEST_DATABASE_URL` (a Postgres server where the user may create databases) to run them on Postgres too. They create and drop a uniquely named database per test.
 

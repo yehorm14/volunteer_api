@@ -15,6 +15,8 @@ import type {
 // A production build without it would send API calls to the host's SPA rewrite, so it is reported as a config error.
 const envApiUrl = (import.meta.env.VITE_API_URL as string | undefined)?.trim().replace(/\/+$/, '')
 
+export const DEMO_SESSION_KEY = 'demo_session'
+
 export const API_CONFIG_ERROR: string | null =
   !envApiUrl && import.meta.env.PROD
     ? 'VITE_API_URL is not set. Set it to the backend URL and rebuild the frontend.'
@@ -23,6 +25,9 @@ export const API_CONFIG_ERROR: string | null =
 if (API_CONFIG_ERROR) {
   console.error(`[config] ${API_CONFIG_ERROR}`)
 }
+
+// Set VITE_DEMO_ENABLED=true at build time when the API has DEMO_PUBLIC=1, to show the sample-workspace button.
+export const DEMO_ENABLED = (import.meta.env.VITE_DEMO_ENABLED as string | undefined) === 'true'
 
 const API_BASE_URL = envApiUrl || '/api'
 
@@ -48,6 +53,7 @@ api.interceptors.response.use(
   (error: AxiosError) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('access_token')
+      localStorage.removeItem(DEMO_SESSION_KEY)
       window.location.href = '/login'
     }
     return Promise.reject(error)
@@ -69,6 +75,12 @@ export async function login(email: string, password: string): Promise<TokenRespo
   const res = await api.post<TokenResponse>('/auth/login', form, {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
   })
+  return res.data
+}
+
+// Passwordless sign-in to the shared read-only sample workspace
+export async function loginDemo(): Promise<TokenResponse> {
+  const res = await api.post<TokenResponse>('/auth/demo')
   return res.data
 }
 

@@ -15,5 +15,10 @@ services:
         sync: false # optional: leave empty to run with AI features disabled
       - key: CORS_ORIGINS
         sync: false # set to the frontend URL, e.g. https://your-app.vercel.app
+      # Optional public read-only sample workspace; see docs/DEPLOY.md.
+      # - key: DEMO_USER_EMAIL
+      #   value: demo@example.com
+      # - key: DEMO_PUBLIC
+      #   value: "1"
       # SQLite lives on the free instance's ephemeral disk and resets on redeploy.
       # Set DATABASE_URL to a Postgres URL (postgres:// is accepted) to keep data.

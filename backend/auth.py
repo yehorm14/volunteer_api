@@ -59,12 +59,21 @@ def get_password_hash(password: str) -> str:
     # Convert the bytes back to a standard string for the database
     return hashed_bytes.decode('utf-8')
 
-def create_access_token(data: dict):
+def create_access_token(data: dict, expires_minutes: int | None = None):
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=_expire_minutes())
+    expire = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes or _expire_minutes())
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, get_secret_key(), algorithm=_algorithm())
     return encoded_jwt
+
+def token_is_demo(token: str) -> bool:
+    """True if the token was minted by /auth/demo. Read from the token itself, never from the environment."""
+    try:
+        payload = jwt.decode(token, get_secret_key(), algorithms=[_algorithm()])
+    except jwt.PyJWTError:
+        return False
+    return payload.get("demo") is True
+
 
 # This is the dependency we will attach to any protected route
 def get_current_user(

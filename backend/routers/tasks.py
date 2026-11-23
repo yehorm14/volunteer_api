@@ -1,13 +1,13 @@
 from fastapi import APIRouter, status
 
 from .. import schemas, models
-from ..deps import DB, CurrentUser, get_owned_task
+from ..deps import DB, CurrentUser, WritableUser, get_owned_task
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 
 @router.post("", response_model=schemas.Task, status_code=status.HTTP_201_CREATED)
-def create_task(task_in: schemas.TaskCreate, current_user: CurrentUser, db: DB):
+def create_task(task_in: schemas.TaskCreate, current_user: WritableUser, db: DB):
     new_task = models.Task(**task_in.model_dump(), owner_id=current_user.id)
     db.add(new_task)
     db.commit()
@@ -26,7 +26,7 @@ def read_task(task_id: int, current_user: CurrentUser, db: DB):
 
 
 @router.patch("/{task_id}", response_model=schemas.Task)
-def update_task(task_id: int, task_in: schemas.TaskUpdate, current_user: CurrentUser, db: DB):
+def update_task(task_id: int, task_in: schemas.TaskUpdate, current_user: WritableUser, db: DB):
     task = get_owned_task(db, task_id, current_user)
     for key, value in task_in.model_dump(exclude_unset=True).items():
         setattr(task, key, value)
@@ -36,7 +36,7 @@ def update_task(task_id: int, task_in: schemas.TaskUpdate, current_user: Current
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_task(task_id: int, current_user: CurrentUser, db: DB):
+def delete_task(task_id: int, current_user: WritableUser, db: DB):
     task = get_owned_task(db, task_id, current_user)
     db.delete(task)
     db.commit()
