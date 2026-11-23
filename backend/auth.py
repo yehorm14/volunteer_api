@@ -87,18 +87,19 @@ def get_current_user(
     )
     
     try:
-        # Decode the token to extract the user email
         payload = jwt.decode(token, get_secret_key(), algorithms=[_algorithm()])
-        # The | None satisfies the Pylance type checker for dictionary get methods
-        email: str | None = payload.get("sub")
-        if email is None:
-            raise credentials_exception
     except jwt.PyJWTError:
         raise credentials_exception
-    
-    # Check the database to make sure the user actually exists
-    user = db.query(models.User).filter(models.User.email == email.strip().lower()).first()
-    if user is None:
+
+    # Resolve by the immutable user id. Tokens without a valid integer "uid" (issued before
+    # the id claim existed, whose email "sub" may now point at a different account after
+    # email normalisation) are rejected so the user simply signs in again.
+    uid = payload.get("uid")
+    if not isinstance(uid, int) or isinstance(uid, bool):
         raise credentials_exception
-        
+
+    user = db.query(models.User).filter(models.User.id == uid).first()
+    if user is None or not user.is_active:
+        raise credentials_exception
+
     return user

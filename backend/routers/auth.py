@@ -47,14 +47,14 @@ def login_for_access_token(
 ):
     user = db.query(models.User).filter(models.User.email == schemas.normalize_email(form_data.username)).first()
 
-    if not user or not auth.verify_password(form_data.password, user.hashed_password):  # type: ignore
+    if not user or not user.is_active or not auth.verify_password(form_data.password, user.hashed_password):  # type: ignore
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    access_token = auth.create_access_token(data={"sub": user.email})
+    access_token = auth.create_access_token(data={"sub": user.email, "uid": user.id})
     return {"access_token": access_token, "token_type": "bearer"}
 
 
@@ -67,5 +67,5 @@ def login_to_sample_workspace(db: DB):
     if user is None:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="The sample workspace is not ready yet.")
     # demo=true makes the token read-only on its own; the short expiry limits how long one stays valid.
-    token = auth.create_access_token(data={"sub": user.email, "demo": True}, expires_minutes=DEMO_TOKEN_MINUTES)
+    token = auth.create_access_token(data={"sub": user.email, "uid": user.id, "demo": True}, expires_minutes=DEMO_TOKEN_MINUTES)
     return {"access_token": token, "token_type": "bearer"}

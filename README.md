@@ -140,3 +140,7 @@ MIT. See [LICENSE](LICENSE).
 ## Upgrading: case-duplicate emails (migration 0004)
 
 Migration 0004 lower-cases every stored email and adds a unique index on `lower(email)`. If an existing database holds accounts that differ only by case, the oldest one (lowest id) keeps the plain lower-cased address. Each other one is deactivated and renamed to `<local>+duplicate-<id>@<domain>`; it keeps its tasks and password, nothing is deleted, and each rename is logged as a warning during the migration. Review those accounts afterwards and merge or remove them by hand. Downgrading drops the index but does not restore the original casing.
+
+Sign-in tokens now carry the user id (`uid` claim) and the API resolves the account by id, and rejects deactivated accounts. Tokens issued before this deploy have no `uid`, so every existing session is signed out once and users log in again. This also stops an old token for a renamed duplicate account from resolving to the surviving account.
+
+Note: the `compare_metadata` check in `backend/tests/test_migrations.py` only compares the `lower(email)` expression index meaningfully on Postgres (SQLite reflection skips expression indexes), so rely on the Postgres CI job for it.

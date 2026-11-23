@@ -84,6 +84,8 @@ def _revision():
         return c.execute(text("SELECT version_num FROM alembic_version")).scalar()
 
 
+# NOTE: compare_metadata only checks the lower(email) expression index meaningfully on Postgres;
+# SQLite reflection ignores expression indexes, so the postgres CI job is the real check.
 def test_empty_database_reaches_target_schema(use_db):
     migrate.upgrade_to_head()
     assert migrate.is_up_to_date()
