@@ -88,3 +88,22 @@ def test_legacy_status_is_still_listed(client, auth_headers):
     session.commit()
     r = client.get("/tasks", headers=auth_headers)
     assert r.status_code == 200 and r.json()[0]["status"] == "In Progress"
+
+
+def test_null_title_legacy_row_is_repaired_listed_and_editable(client, auth_headers):
+    from backend.database import get_db
+
+    task = client.post("/tasks", json={"title": "x"}, headers=auth_headers).json()
+    session = next(client.app.dependency_overrides[get_db]())
+    session.execute(text("PRAGMA ignore_check_constraints = ON"))
+    session.execute(text("DROP TABLE tasks"))
+    session.execute(text("CREATE TABLE tasks (id INTEGER PRIMARY KEY, title VARCHAR, description VARCHAR, status VARCHAR, owner_id INTEGER)"))
+    session.execute(text("INSERT INTO tasks VALUES (1, NULL, NULL, 'pending', 1), (2, '  ', NULL, 'pending', 1)"))
+    session.commit()
+    engine = session.get_bind()
+    assert normalize_task_statuses(engine) == 2
+    r = client.get("/tasks", headers=auth_headers)
+    assert r.status_code == 200
+    assert [t["title"] for t in r.json()] == ["(untitled)", "(untitled)"]
+    r = client.patch("/tasks/1", json={"title": "Named now"}, headers=auth_headers)
+    assert r.status_code == 200 and r.json()["title"] == "Named now"
