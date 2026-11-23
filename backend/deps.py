@@ -11,9 +11,15 @@ CurrentUser = Annotated[models.User, Depends(auth.get_current_user)]
 DB = Annotated[Session, Depends(get_db)]
 
 
-def writable_user(current_user: CurrentUser) -> models.User:
-    """The signed-in user, unless it is the public read-only sample user (then 403)."""
-    if demo.is_demo_user(current_user):
+def writable_user(
+    current_user: CurrentUser, token: Annotated[str, Depends(auth.oauth2_scheme)]
+) -> models.User:
+    """The signed-in user, unless this is a sample-workspace session (then 403).
+
+    A token minted by /auth/demo carries demo=true and stays read-only even if DEMO_PUBLIC is
+    later removed; the env check additionally protects the demo account against password logins.
+    """
+    if auth.token_is_demo(token) or demo.is_demo_user(current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=demo.READ_ONLY_DETAIL)
     return current_user
 

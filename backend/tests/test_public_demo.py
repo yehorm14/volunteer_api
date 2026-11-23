@@ -106,3 +106,22 @@ def test_public_demo_seeds_without_a_password(monkeypatch):
         db.close()
     monkeypatch.delenv("DEMO_PUBLIC")
     assert seed_demo_from_env() is False  # without public mode a password is still required
+
+
+def test_demo_token_stays_read_only_after_demo_public_is_removed(client, public_demo, monkeypatch):
+    headers = demo_headers(client)
+    monkeypatch.delenv("DEMO_PUBLIC")
+    monkeypatch.delenv("DEMO_USER_EMAIL")
+    assert client.get("/tasks", headers=headers).status_code == 200
+    assert client.post("/tasks", json={"title": "x"}, headers=headers).status_code == 403
+    assert client.post("/auth/demo").status_code == 404
+
+
+def test_demo_token_is_short_lived(client, public_demo):
+    import jwt, os
+    from datetime import datetime, timezone
+
+    token = client.post("/auth/demo").json()["access_token"]
+    payload = jwt.decode(token, os.environ["SECRET_KEY"], algorithms=["HS256"])
+    assert payload["demo"] is True
+    assert payload["exp"] - datetime.now(timezone.utc).timestamp() <= 15 * 60 + 5
