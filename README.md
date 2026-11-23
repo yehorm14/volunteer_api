@@ -18,7 +18,7 @@ A task manager for volunteer coordinators, with optional GPT-4o-mini helpers for
 ## Features
 
 - Register and log in with email and password (at least 8 characters, bcrypt hashes, JWT bearer tokens).
-- Create, view, edit and delete tasks with `pending`, `in_progress` and `completed` status.
+- Create, view, edit and delete tasks with `pending`, `in_progress` and `completed` status (the API rejects anything else; sending `description: null` clears the description).
 - Dashboard with status counts, filter tabs and optimistic updates that roll back on failure.
 - Ownership checks on every task route; another user's task returns 404.
 - AI categorise: one-word category and short explanation for a task.

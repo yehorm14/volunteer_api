@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import type { Task, TaskStatus } from '../../types'
 import TaskStatusBadge from './TaskStatusBadge'
 import Button from '../ui/Button'
+import { isTaskStatus } from '../../utils/status'
 
 interface TaskCardProps {
   task: Task
@@ -24,6 +25,8 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
 
 export default function TaskCard({ task, onStatusChange, onDelete }: TaskCardProps) {
   const navigate = useNavigate()
+  // Unrecognised legacy statuses are repaired by moving the task back to pending.
+  const known = isTaskStatus(task.status)
 
   function handleCardClick(e: MouseEvent<HTMLDivElement>) {
     if ((e.target as HTMLElement).closest('button')) return
@@ -50,10 +53,10 @@ export default function TaskCard({ task, onStatusChange, onDelete }: TaskCardPro
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => onStatusChange(task.id, STATUS_CYCLE[task.status])}
+          onClick={() => onStatusChange(task.id, known ? STATUS_CYCLE[task.status as TaskStatus] : 'pending')}
           className="text-xs"
         >
-          {STATUS_LABEL[task.status]}
+          {known ? STATUS_LABEL[task.status as TaskStatus] : 'Reset to pending'}
         </Button>
         <Button
           variant="ghost"

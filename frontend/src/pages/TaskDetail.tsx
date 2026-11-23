@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import type { Task, TaskCreate } from '../types'
+import type { Task, TaskFormValues } from '../types'
 import * as api from '../services/api'
 import { useTasks } from '../hooks/useTasks'
 import TaskStatusBadge from '../components/tasks/TaskStatusBadge'
@@ -34,7 +34,7 @@ export default function TaskDetail() {
       .finally(() => setIsLoading(false))
   }, [id])
 
-  async function handleSave(data: TaskCreate) {
+  async function handleSave(data: TaskFormValues) {
     if (!task) return
     setIsSaving(true)
     try {

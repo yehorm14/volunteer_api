@@ -21,3 +21,9 @@ Generate a secret key with `python -c "import secrets; print(secrets.token_urlsa
 - Frontend on Vercel: set the project root to `frontend` and add `VITE_API_URL` with the API URL. It is read at build time, so redeploy after changing it. `vercel.json` rewrites all routes to `index.html`.
 
 SQLite on Render's free tier is ephemeral. Point `DATABASE_URL` at a Postgres database to keep data. The Postgres path has a URL-normalisation test but has not been run against a live database.
+
+## Task status contract and legacy data
+
+Valid statuses are `pending`, `in_progress` and `completed` (`backend/task_status.py`, mirrored in `frontend/src/types/index.ts`; a test keeps them in sync). The API returns 422 for anything else, for a null or blank `title`, and for a null `status`.
+
+Rows written before this contract may hold other values. At startup the API rewrites them in place and never deletes a task: known spellings (`In Progress`, `done`, `todo`, ...) map to the canonical value, and anything unrecognised or NULL becomes `pending`. New databases also get a `CHECK` constraint on `tasks.status`; existing databases are not altered by `create_all`, so they rely on API validation until migrations exist. A task that still carries an unrecognised status shows an "Unknown status" badge in the dashboard and can be reset to pending from its card.

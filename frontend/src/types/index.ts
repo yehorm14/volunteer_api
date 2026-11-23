@@ -6,20 +6,29 @@ export interface Task {
   id: number
   title: string
   description: string | null
-  status: TaskStatus
+  // The API only accepts TaskStatus, but rows saved before the contract existed
+  // may still hold another value, so reads are typed as string (see utils/status.ts).
+  status: string
   owner_id: number
 }
 
 export interface TaskCreate {
   title: string
-  description?: string
+  description?: string | null
   status?: TaskStatus
 }
 
 export interface TaskUpdate {
   title?: string
-  description?: string
+  // null clears the description; leave the key out to keep it
+  description?: string | null
   status?: TaskStatus
+}
+
+export interface TaskFormValues {
+  title: string
+  description?: string | null
+  status: TaskStatus
 }
 
 // ── User ────────────────────────────────────────────────────
