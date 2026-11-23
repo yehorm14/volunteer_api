@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from openai import APIConnectionError, AsyncOpenAI, OpenAI, OpenAIError, RateLimitError
+from pydantic import ValidationError
 
 from .. import ai_quota, models, schemas
 from ..ai_client import get_async_openai_client, get_openai_client
@@ -15,6 +16,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/tasks", tags=["ai"])
 
 AI_UNAVAILABLE_DETAIL = "AI service is currently unavailable. Please try again later."
+AI_INVALID_TASK_DETAIL = "The AI returned a task that could not be used. Please try again or rephrase your notes."
 
 
 @router.post("/{task_id}/ai-categorize")
@@ -82,9 +84,17 @@ async def extract_task_from_notes(
             if not extracted:
                 raise HTTPException(status_code=500, detail="AI failed to parse content.")
 
+            # Generated tasks go through the same contract as POST /tasks (strip, nonblank, length cap).
+            try:
+                valid = schemas.TaskCreate(title=extracted.title, description=extracted.description)
+            except ValidationError:
+                logger.warning("AI extract returned a task that failed validation")
+                ai_quota.refund(db, *charge)
+                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=AI_INVALID_TASK_DETAIL)
+
             new_task = models.Task(
-                title=extracted.title,
-                description=extracted.description,
+                title=valid.title,
+                description=valid.description,
                 owner_id=current_user.id,
                 status="pending",
             )
