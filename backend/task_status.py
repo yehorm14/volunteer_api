@@ -56,4 +56,6 @@ def normalize_task_statuses(conn: Connection) -> int:
             text("UPDATE tasks SET status = :new WHERE id = :id"),
             {"new": normalize_legacy_status(old), "id": task_id},
         )
-    return len(rows)
+    # A NULL or blank title would make GET /tasks fail response validation for the whole list.
+    result = conn.execute(text("UPDATE tasks SET title = '(untitled)' WHERE title IS NULL OR TRIM(title) = ''"))
+    return len(rows) + (result.rowcount or 0)
