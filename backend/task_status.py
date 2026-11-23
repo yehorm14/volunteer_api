@@ -56,4 +56,7 @@ def normalize_task_statuses(engine: Engine) -> int:
                 {"new": normalize_legacy_status(old), "id": task_id},
             )
             changed += 1
+        # A NULL or blank title would make GET /tasks fail response validation for the whole list.
+        result = conn.execute(text("UPDATE tasks SET title = '(untitled)' WHERE title IS NULL OR TRIM(title) = ''"))
+        changed += result.rowcount or 0
     return changed
