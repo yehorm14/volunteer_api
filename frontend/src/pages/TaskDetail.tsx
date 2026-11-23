@@ -9,6 +9,7 @@ import AIPanel from '../components/tasks/AIPanel'
 import Button from '../components/ui/Button'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 import ErrorState from '../components/ui/ErrorState'
+import { describeError } from '../utils/errors'
 
 export default function TaskDetail() {
   const { id } = useParams<{ id: string }>()
@@ -20,6 +21,7 @@ export default function TaskDetail() {
   const [error, setError] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
@@ -37,10 +39,14 @@ export default function TaskDetail() {
   async function handleSave(data: TaskFormValues) {
     if (!task) return
     setIsSaving(true)
+    setSaveError(null)
     try {
       const updated = await editTask(task.id, data)
       setTask(updated)
       setIsEditing(false)
+    } catch (err) {
+      // Stay in the form so the user's changes are not lost.
+      setSaveError(`Your changes were not saved. ${describeError(err)}`)
     } finally {
       setIsSaving(false)
     }
@@ -90,6 +96,11 @@ export default function TaskDetail() {
       {isEditing ? (
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
           <h2 className="text-lg font-semibold text-slate-100 mb-5">Edit task</h2>
+          {saveError && (
+            <div role="alert" className="mb-4 px-4 py-3 bg-red-950 border border-red-800 rounded-lg text-sm text-red-300">
+              {saveError}
+            </div>
+          )}
           <TaskForm
             initialValues={{
               title: task.title,
@@ -116,7 +127,7 @@ export default function TaskDetail() {
           )}
 
           <div className="flex items-center gap-3 pt-4 border-t border-slate-800">
-            <Button onClick={() => setIsEditing(true)} variant="secondary" size="sm">
+            <Button onClick={() => { setSaveError(null); setIsEditing(true) }} variant="secondary" size="sm">
               Edit
             </Button>
 

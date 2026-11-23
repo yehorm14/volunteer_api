@@ -111,11 +111,18 @@ The user is created at startup, or on demand with `python -m backend.seed_demo`.
 
 The migration tests run on SQLite by default; set `TEST_DATABASE_URL` (a Postgres server where the user may create databases) to run them on Postgres too. They create and drop a uniquely named database per test.
 
-CI (`.github/workflows/ci.yml`) runs the backend tests, a Postgres job (migrations through the CLI, then `backend/tests/test_migrations.py` against a Postgres 16 service), then on the frontend `npm ci`, `npm run typecheck` and `npm run build`. There are no frontend unit tests.
+CI (`.github/workflows/ci.yml`) runs the backend tests, a Postgres job (migrations through the CLI, then `backend/tests/test_migrations.py` against a Postgres 16 service), then on the frontend `npm ci`, `npm run typecheck`, `npm test` and `npm run build`.
+
+### Frontend tests
+
+```bash
+cd frontend && npm ci && npm test
+```
+
+Vitest, Testing Library and msw run the real app in jsdom against an in-memory fake of the API. Nothing touches a live backend, provider or database, and any request a test has not mocked fails the test. They cover sign-in, creating, status changes, filtering and deleting tasks, legacy statuses, a failed status change, delete and create (the list is restored and the user is told why), a failed load, a stale list response, and overlapping edits.
 
 ## Limitations
 
-- No frontend tests.
 - The password rules are length only; there is no email verification or password reset.
 - AI endpoints are tested with a mocked OpenAI client only.
 
