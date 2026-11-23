@@ -5,6 +5,7 @@ import type { AICategorizeResponse, Task, ApiError } from '../../types'
 import * as api from '../../services/api'
 import Button from '../ui/Button'
 import Textarea from '../ui/Textarea'
+import { useTasks } from '../../hooks/useTasks'
 
 interface AIPanelProps {
   taskId: number
@@ -12,6 +13,7 @@ interface AIPanelProps {
 }
 
 export default function AIPanel({ taskId, taskTitle }: AIPanelProps) {
+  const { insertTask } = useTasks()
   const [catResult, setCatResult] = useState<AICategorizeResponse | null>(null)
   const [catLoading, setCatLoading] = useState(false)
   const [catError, setCatError] = useState('')
@@ -51,6 +53,7 @@ export default function AIPanel({ taskId, taskTitle }: AIPanelProps) {
     setExtractResult(null)
     try {
       const task = await api.extractTaskFromNotes(notes)
+      insertTask(task)
       setExtractResult(task)
     } catch (err) {
       const e = err as AxiosError<ApiError>
