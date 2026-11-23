@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, CheckConstraint
+from sqlalchemy import Column, Integer, String, Boolean, Date, ForeignKey, CheckConstraint
 from sqlalchemy.orm import relationship
 from .database import Base
 from .task_status import DEFAULT_STATUS, TASK_STATUSES
@@ -34,3 +34,12 @@ class Task(Base):
 
     # The relationship tells SQLAlchemy to fetch the specific user who owns this task
     owner = relationship("User", back_populates="tasks")
+
+
+class AiUsage(Base):
+    """AI calls a user has made on one UTC day (see backend/ai_quota.py). Migration 0003."""
+    __tablename__ = "ai_usage"
+
+    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    day = Column(Date, primary_key=True)
+    count = Column(Integer, nullable=False, default=0)

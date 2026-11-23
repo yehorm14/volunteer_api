@@ -8,6 +8,9 @@ Backend variables go in a `.env` file at the repo root (see `.env.example`). The
 | :--- | :--- | :--- |
 | `SECRET_KEY` | yes | none; the API refuses to start without it, or with `change-me` or a key under 16 characters |
 | `OPENAI_API_KEY` | no | AI endpoints return 503 |
+| `AUTH_RATE_LIMIT`, `AUTH_RATE_WINDOW_SECONDS` | no | `5` and `60`: at most 5 requests per IP per window to each of `/auth/login` and `/auth/register`, then 429 with a `Retry-After` header. Counted in memory per API process, so it resets on restart and a multi-worker deploy allows that many times more |
+| `TRUST_PROXY_HEADERS`, `TRUSTED_PROXY_HOPS` | no | unset: the rate limit uses the connecting address and ignores `X-Forwarded-For`. Set `TRUST_PROXY_HEADERS=1` behind a proxy such as Render's; the client IP is then the entry `TRUSTED_PROXY_HOPS` (default `1`) places from the right of `X-Forwarded-For`, which only your own proxies write. Do not enable it when the API is reachable directly, or clients can pick their own IP |
+| `AI_DAILY_LIMIT` | no | `20`: AI calls per user per UTC day, shared by `/tasks/extract` and `/tasks/{id}/ai-categorize`; over it the API answers 429 until 00:00 UTC. Stored in the `ai_usage` table (migration `0003`), so it survives restarts. Calls that fail with 404 or 503 are not counted |
 | `DEMO_USER_EMAIL`, `DEMO_USER_PASSWORD` | no | unset; when both are set, a demo user with sample tasks is created at startup (password at least 8 characters) |
 | `DEMO_PUBLIC` | no | unset; set to `1` together with `DEMO_USER_EMAIL` to turn that user into a public, read-only sample workspace (see below). `DEMO_USER_PASSWORD` is then optional |
 | `DATABASE_URL` | no | SQLite file at `backend/volunteer.db`; `postgres://` and `postgresql://` URLs work (both are run through the psycopg2 driver) |

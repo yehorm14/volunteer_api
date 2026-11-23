@@ -5,13 +5,19 @@ from fastapi.security import OAuth2PasswordRequestForm
 
 from .. import auth, demo, models, schemas
 from ..deps import DB
+from ..rate_limit import limit_auth_attempts
 
 DEMO_TOKEN_MINUTES = 15
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/register", response_model=schemas.UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register",
+    response_model=schemas.UserResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(limit_auth_attempts)],
+)
 def register_user(user_in: schemas.UserCreate, db: DB):
     if db.query(models.User).filter(models.User.email == user_in.email).first():
         raise HTTPException(status_code=400, detail="A user with this email already exists.")
@@ -26,7 +32,7 @@ def register_user(user_in: schemas.UserCreate, db: DB):
     return new_user
 
 
-@router.post("/login", response_model=schemas.Token)
+@router.post("/login", response_model=schemas.Token, dependencies=[Depends(limit_auth_attempts)])
 def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: DB,
