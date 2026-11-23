@@ -58,13 +58,18 @@ def _legacy_engine():
     return engine
 
 
-def test_startup_normalisation_keeps_every_task():
+def _normalize(engine):
+    with engine.begin() as conn:
+        return normalize_task_statuses(conn)
+
+
+def test_normalisation_keeps_every_task():
     engine = _legacy_engine()
-    assert normalize_task_statuses(engine) == 4
+    assert _normalize(engine) == 4
     with engine.connect() as c:
         rows = c.execute(text("SELECT title, status FROM tasks ORDER BY id")).all()
     assert [r[1] for r in rows] == ["pending", "in_progress", "completed", "pending", "pending"]
-    assert normalize_task_statuses(engine) == 0  # idempotent
+    assert _normalize(engine) == 0  # idempotent
 
 
 def test_database_constraint_rejects_bad_status():

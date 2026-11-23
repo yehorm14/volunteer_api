@@ -71,8 +71,9 @@ def test_parse_origins(raw, expected):
 @pytest.mark.parametrize(
     "url, expected",
     [
-        ("postgres://u:p@host:5432/db", "postgresql://u:p@host:5432/db"),
-        ("postgresql://u:p@host/db", "postgresql://u:p@host/db"),
+        ("postgres://u:p@host:5432/db", "postgresql+psycopg2://u:p@host:5432/db"),
+        ("postgresql://u:p@host/db", "postgresql+psycopg2://u:p@host/db"),
+        ("postgresql+psycopg://u:p@host/db", "postgresql+psycopg://u:p@host/db"),
         ("sqlite:///./x.db", "sqlite:///./x.db"),
     ],
 )
