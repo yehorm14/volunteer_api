@@ -43,7 +43,7 @@ flowchart LR
 ```
 
 - React app (Axios) calls a FastAPI app split into `auth`, `tasks` and `ai` routers.
-- SQLAlchemy stores users and tasks in SQLite, or Postgres via `DATABASE_URL`.
+- SQLAlchemy stores users and tasks in SQLite, or Postgres via `DATABASE_URL`. Alembic migrations (`backend/migrations`) build and upgrade the schema at startup; see [docs/DEPLOY.md](docs/DEPLOY.md).
 - The OpenAI client is created on first use, so the API starts without a key.
 - The API refuses to start if `SECRET_KEY` is missing, is the `change-me` placeholder, or is under 16 characters.
 
@@ -109,7 +109,9 @@ The user is created at startup, or on demand with `python -m backend.seed_demo`.
 - Config: `SECRET_KEY` validation, `.env` loading only from the real entry point, CORS origin parsing, database URL normalisation.
 - Demo seeding: creation, idempotency and startup seeding.
 
-CI (`.github/workflows/ci.yml`) runs the backend tests, then on the frontend `npm ci`, `npm run typecheck`, `npm test` and `npm run build`.
+The migration tests run on SQLite by default; set `TEST_DATABASE_URL` (a Postgres server where the user may create databases) to run them on Postgres too. They create and drop a uniquely named database per test.
+
+CI (`.github/workflows/ci.yml`) runs the backend tests, a Postgres job (migrations through the CLI, then `backend/tests/test_migrations.py` against a Postgres 16 service), then on the frontend `npm ci`, `npm run typecheck`, `npm test` and `npm run build`.
 
 ### Frontend tests
 
@@ -121,7 +123,6 @@ Vitest, Testing Library and msw run the real app in jsdom against an in-memory f
 
 ## Limitations
 
-- No migrations (tables are created at startup).
 - The password rules are length only; there is no email verification or password reset.
 - AI endpoints are tested with a mocked OpenAI client only.
 
