@@ -3,13 +3,15 @@
     DEMO_USER_EMAIL=demo@example.com DEMO_USER_PASSWORD=demo-password python -m backend.seed_demo
 
 The API also calls seed_demo_from_env() at startup, so setting both variables is enough.
+With DEMO_PUBLIC=1 the password may be left out (see backend/demo.py).
 """
 import os
+import secrets
 import sys
 
 from sqlalchemy.orm import Session
 
-from . import auth, models, schemas
+from . import auth, demo, models, schemas
 from .database import _session_factory, init_db
 
 SAMPLE_TASKS = [
@@ -38,6 +40,9 @@ def seed_demo_from_env() -> bool:
     """Seed from DEMO_USER_EMAIL and DEMO_USER_PASSWORD. Does nothing unless both are set."""
     email = os.getenv("DEMO_USER_EMAIL", "").strip()
     password = os.getenv("DEMO_USER_PASSWORD", "")
+    if email and not password and demo.is_public_demo_enabled():
+        # Public sample workspace: visitors use POST /auth/demo, so nobody ever needs this password.
+        password = secrets.token_urlsafe(24)
     if not email or not password:
         return False
     init_db()

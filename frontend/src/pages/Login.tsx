@@ -5,6 +5,7 @@ import { useAuth } from '../hooks/useAuth'
 import type { ApiError } from '../types'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
+import DemoButton from '../components/auth/DemoButton'
 
 export default function Login() {
   const { login, token, isLoading } = useAuth()
@@ -85,6 +86,10 @@ export default function Login() {
               Create one
             </Link>
           </p>
+        </div>
+
+        <div className="mt-6 flex justify-center">
+          <DemoButton />
         </div>
       </div>
     </div>

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { TaskStatus, TaskCreate } from '../types'
 import { useTasks } from '../hooks/useTasks'
+import { useAuth } from '../hooks/useAuth'
 import TaskCard from '../components/tasks/TaskCard'
 import TaskForm from '../components/tasks/TaskForm'
 import Modal from '../components/ui/Modal'
@@ -25,6 +26,7 @@ const statsConfig = [
 ]
 
 export default function Dashboard() {
+  const { isDemo } = useAuth()
   const { tasks, isLoading, error, fetchTasks, addTask, editTask, removeTask } = useTasks()
   const [filter, setFilter] = useState<FilterStatus>('all')
   const [isCreateOpen, setIsCreateOpen] = useState(false)
@@ -66,8 +68,18 @@ export default function Dashboard() {
             {tasks.length} task{tasks.length !== 1 ? 's' : ''} total
           </p>
         </div>
-        <Button onClick={() => setIsCreateOpen(true)}>+ New task</Button>
+        {!isDemo && <Button onClick={() => setIsCreateOpen(true)}>+ New task</Button>}
       </div>
+
+      {isDemo && (
+        <div
+          role="status"
+          className="mb-6 px-4 py-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-sm text-amber-300"
+        >
+          You are viewing a read-only sample workspace with made-up tasks. Changes and AI tools are
+          turned off. Sign out and create an account to manage your own tasks.
+        </div>
+      )}
 
       {/* Stats row */}
       {tasks.length > 0 && (
@@ -111,7 +123,7 @@ export default function Dashboard() {
         <EmptyState
           title="No tasks yet"
           description="Create your first task to get started tracking your volunteer work."
-          action={<Button onClick={() => setIsCreateOpen(true)}>+ New task</Button>}
+          action={isDemo ? undefined : <Button onClick={() => setIsCreateOpen(true)}>+ New task</Button>}
           icon={
             <svg
               width="48"
@@ -138,6 +150,7 @@ export default function Dashboard() {
               task={task}
               onStatusChange={handleStatusChange}
               onDelete={handleDelete}
+              readOnly={isDemo}
             />
           ))}
         </div>

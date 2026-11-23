@@ -7,7 +7,10 @@ interface AuthContextValue {
   user: { email: string } | null
   token: string | null
   isLoading: boolean
+  /** True in the shared read-only sample workspace: the API rejects every change. */
+  isDemo: boolean
   login: (email: string, password: string) => Promise<void>
+  loginAsDemo: () => Promise<void>
   register: (email: string, password: string) => Promise<User>
   logout: () => void
 }
@@ -28,6 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null)
   const [user, setUser] = useState<{ email: string } | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isDemo, setIsDemo] = useState(false)
 
   // Restore session from localStorage on mount
   useEffect(() => {
@@ -35,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (stored) {
       const email = decodeJwtEmail(stored)
       setToken(stored)
+      setIsDemo(localStorage.getItem(api.DEMO_SESSION_KEY) === '1')
       if (email) setUser({ email })
     }
     setIsLoading(false)
@@ -43,8 +48,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function login(email: string, password: string) {
     const { access_token } = await api.login(email, password)
     localStorage.setItem('access_token', access_token)
+    localStorage.removeItem(api.DEMO_SESSION_KEY)
     setToken(access_token)
     setUser({ email })
+    setIsDemo(false)
+  }
+
+  async function loginAsDemo() {
+    const { access_token } = await api.loginDemo()
+    localStorage.setItem('access_token', access_token)
+    localStorage.setItem(api.DEMO_SESSION_KEY, '1')
+    setToken(access_token)
+    setUser({ email: decodeJwtEmail(access_token) ?? 'Sample workspace' })
+    setIsDemo(true)
   }
 
   async function register(email: string, password: string): Promise<User> {
@@ -56,12 +72,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   function logout() {
     localStorage.removeItem('access_token')
+    localStorage.removeItem(api.DEMO_SESSION_KEY)
     setToken(null)
     setUser(null)
+    setIsDemo(false)
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, token, isLoading, isDemo, login, loginAsDemo, register, logout }}>
       {children}
     </AuthContext.Provider>
   )

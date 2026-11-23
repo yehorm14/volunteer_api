@@ -9,6 +9,8 @@ interface TaskCardProps {
   task: Task
   onStatusChange: (id: number, status: TaskStatus) => void
   onDelete: (id: number) => void
+  /** Hide the change/delete buttons (sample workspace). */
+  readOnly?: boolean
 }
 
 const STATUS_CYCLE: Record<TaskStatus, TaskStatus> = {
@@ -23,7 +25,7 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
   completed: 'Reset to pending',
 }
 
-export default function TaskCard({ task, onStatusChange, onDelete }: TaskCardProps) {
+export default function TaskCard({ task, onStatusChange, onDelete, readOnly = false }: TaskCardProps) {
   const navigate = useNavigate()
   // Unrecognised legacy statuses are repaired by moving the task back to pending.
   const known = isTaskStatus(task.status)
@@ -49,24 +51,26 @@ export default function TaskCard({ task, onStatusChange, onDelete }: TaskCardPro
         <p className="text-sm text-slate-400 line-clamp-2">{task.description}</p>
       )}
 
-      <div className="flex items-center gap-2 mt-auto pt-3 border-t border-slate-800">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => onStatusChange(task.id, known ? STATUS_CYCLE[task.status as TaskStatus] : 'pending')}
-          className="text-xs"
-        >
-          {known ? STATUS_LABEL[task.status as TaskStatus] : 'Reset to pending'}
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => onDelete(task.id)}
-          className="text-xs text-red-400 hover:text-red-300 ml-auto"
-        >
-          Delete
-        </Button>
-      </div>
+      {!readOnly && (
+        <div className="flex items-center gap-2 mt-auto pt-3 border-t border-slate-800">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onStatusChange(task.id, known ? STATUS_CYCLE[task.status as TaskStatus] : 'pending')}
+            className="text-xs"
+          >
+            {known ? STATUS_LABEL[task.status as TaskStatus] : 'Reset to pending'}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onDelete(task.id)}
+            className="text-xs text-red-400 hover:text-red-300 ml-auto"
+          >
+            Delete
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

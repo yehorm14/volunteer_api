@@ -7,7 +7,7 @@ from openai import APIConnectionError, AsyncOpenAI, OpenAI, OpenAIError, RateLim
 
 from .. import models, schemas
 from ..ai_client import get_async_openai_client, get_openai_client
-from ..deps import DB, CurrentUser, OwnedTask
+from ..deps import DB, OwnedTask, WritableUser
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +18,7 @@ AI_UNAVAILABLE_DETAIL = "AI service is currently unavailable. Please try again l
 
 @router.post("/{task_id}/ai-categorize")
 def categorize_task_with_ai(
+    _user: WritableUser,  # the public sample workspace may not spend AI credits
     task: OwnedTask,  # resolved first: 404 for a missing/foreign task beats 503 for a missing key
     client: Annotated[OpenAI, Depends(get_openai_client)],
 ):
@@ -42,7 +43,7 @@ def categorize_task_with_ai(
 @router.post("/extract", response_model=schemas.Task, status_code=status.HTTP_201_CREATED)
 async def extract_task_from_notes(
     payload: schemas.ExtractRequest,
-    current_user: CurrentUser,
+    current_user: WritableUser,
     db: DB,
     aclient: Annotated[AsyncOpenAI, Depends(get_async_openai_client)],
 ) -> models.Task:
