@@ -13,9 +13,15 @@ _DEFAULT_DB_PATH = Path(__file__).resolve().parent / "volunteer.db"
 
 
 def normalize_database_url(url: str) -> str:
-    """Some hosts hand out postgres:// URLs, which SQLAlchemy 2 no longer accepts."""
-    if url.startswith("postgres://"):
-        return "postgresql://" + url[len("postgres://"):]
+    """Make Postgres URLs usable with the installed driver.
+
+    Hosts hand out postgres:// URLs, which SQLAlchemy 2 no longer accepts, and a bare
+    postgresql:// URL makes SQLAlchemy 2.1 look for psycopg (v3) while requirements.txt
+    ships psycopg2. Pin both to psycopg2 unless the URL names a driver explicitly.
+    """
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg2://" + url[len(prefix):]
     return url
 
 
@@ -38,14 +44,15 @@ def _session_factory() -> sessionmaker:
 
 
 def init_db() -> None:
-    """Create tables (no migrations in this project). Called from app startup."""
-    from . import models  # noqa: F401  (registers the tables on Base)
-    from .task_status import normalize_task_statuses
+    """Bring the database to the latest migration. Called from app startup.
 
-    engine = get_engine()
-    Base.metadata.create_all(bind=engine)
-    # Repair rows written before the status contract existed; never deletes tasks.
-    normalize_task_statuses(engine)
+    Set AUTO_MIGRATE=0 to skip this and run `python -m backend.migrate` yourself (see docs/DEPLOY.md).
+    """
+    if os.getenv("AUTO_MIGRATE", "1").strip().lower() in {"0", "false", "no", "off"}:
+        return
+    from .migrate import upgrade_to_head
+
+    upgrade_to_head()
 
 
 def get_db():

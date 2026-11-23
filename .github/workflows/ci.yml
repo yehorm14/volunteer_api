@@ -18,6 +18,45 @@ jobs:
       - run: pip install -r backend/requirements-dev.txt
       - run: python -m pytest -q
 
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Each test creates and drops its own uniquely named database on this server.
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - run: pip install -r backend/requirements-dev.txt
+      - name: Apply migrations with the CLI to a fresh database
+        env:
+          SECRET_KEY: ci-only-secret-key-not-for-deployment
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE ci_cli_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+          export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/ci_cli_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+          python -m backend.migrate
+          python -m backend.migrate  # repeat run is a no-op
+          python -m backend.migrate --check
+      - name: Migrations and authenticated task flow on Postgres (includes an app restart)
+        run: python -m pytest -q backend/tests/test_migrations.py
+
   frontend:
     runs-on: ubuntu-latest
     defaults:
@@ -32,4 +71,5 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run typecheck
+      - run: npm test
       - run: npm run build

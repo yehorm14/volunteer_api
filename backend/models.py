@@ -16,8 +16,7 @@ class User(Base):
 
 class Task(Base):
     __tablename__ = "tasks"
-    # Only applied to newly created tables; existing databases keep working through
-    # API validation plus the startup normalisation in init_db().
+    # Kept in step with migration 0002 (test_migrations checks the schemas match).
     __table_args__ = (
         CheckConstraint(
             "status IN (" + ", ".join(f"'{s}'" for s in TASK_STATUSES) + ")",

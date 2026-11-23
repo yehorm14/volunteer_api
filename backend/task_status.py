@@ -5,7 +5,7 @@ The frontend mirrors these values in frontend/src/types/index.ts; a test keeps t
 from typing import Literal, get_args
 
 from sqlalchemy import text
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Connection
 
 TaskStatus = Literal["pending", "in_progress", "completed"]
 TASK_STATUSES: tuple[str, ...] = get_args(TaskStatus)
@@ -40,23 +40,22 @@ def normalize_legacy_status(value: str | None) -> str:
     return _LEGACY_ALIASES.get(key, DEFAULT_STATUS)
 
 
-def normalize_task_statuses(engine: Engine) -> int:
-    """Rewrite non-canonical status values in place. Idempotent; returns the number of rows changed."""
+def normalize_task_statuses(conn: Connection) -> int:
+    """Rewrite non-canonical status values in place. Idempotent; returns the number of rows changed.
+
+    Runs inside the caller's transaction (migration 0002 uses it).
+    """
     placeholders = ", ".join(f":s{i}" for i in range(len(TASK_STATUSES)))
     params = {f"s{i}": s for i, s in enumerate(TASK_STATUSES)}
-    changed = 0
-    with engine.begin() as conn:
-        rows = conn.execute(
-            text(f"SELECT id, status FROM tasks WHERE status IS NULL OR status NOT IN ({placeholders})"),
-            params,
-        ).all()
-        for task_id, old in rows:
-            conn.execute(
-                text("UPDATE tasks SET status = :new WHERE id = :id"),
-                {"new": normalize_legacy_status(old), "id": task_id},
-            )
-            changed += 1
-        # A NULL or blank title would make GET /tasks fail response validation for the whole list.
-        result = conn.execute(text("UPDATE tasks SET title = '(untitled)' WHERE title IS NULL OR TRIM(title) = ''"))
-        changed += result.rowcount or 0
-    return changed
+    rows = conn.execute(
+        text(f"SELECT id, status FROM tasks WHERE status IS NULL OR status NOT IN ({placeholders})"),
+        params,
+    ).all()
+    for task_id, old in rows:
+        conn.execute(
+            text("UPDATE tasks SET status = :new WHERE id = :id"),
+            {"new": normalize_legacy_status(old), "id": task_id},
+        )
+    # A NULL or blank title would make GET /tasks fail response validation for the whole list.
+    result = conn.execute(text("UPDATE tasks SET title = '(untitled)' WHERE title IS NULL OR TRIM(title) = ''"))
+    return len(rows) + (result.rowcount or 0)
