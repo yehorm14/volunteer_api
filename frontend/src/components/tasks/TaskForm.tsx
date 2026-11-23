@@ -1,12 +1,14 @@
 import { useState, type FormEvent } from 'react'
-import type { TaskCreate, TaskStatus } from '../../types'
+import type { TaskFormValues, TaskStatus } from '../../types'
+import { isTaskStatus } from '../../utils/status'
 import Button from '../ui/Button'
 import Input from '../ui/Input'
 import Textarea from '../ui/Textarea'
 
 interface TaskFormProps {
-  initialValues?: Partial<TaskCreate>
-  onSubmit: (data: TaskCreate) => Promise<void>
+  initialValues?: { title?: string; description?: string; status?: string }
+  // In edit mode an emptied description is sent as null so the server clears it.
+  onSubmit: (data: TaskFormValues) => Promise<void>
   onCancel?: () => void
   isLoading?: boolean
   mode?: 'create' | 'edit'
@@ -27,7 +29,9 @@ export default function TaskForm({
 }: TaskFormProps) {
   const [title, setTitle] = useState(initialValues.title ?? '')
   const [description, setDescription] = useState(initialValues.description ?? '')
-  const [status, setStatus] = useState<TaskStatus>(initialValues.status ?? 'pending')
+  const [status, setStatus] = useState<TaskStatus>(
+    initialValues.status && isTaskStatus(initialValues.status) ? initialValues.status : 'pending'
+  )
   const [titleError, setTitleError] = useState('')
 
   async function handleSubmit(e: FormEvent) {
@@ -39,7 +43,7 @@ export default function TaskForm({
     setTitleError('')
     await onSubmit({
       title: title.trim(),
-      description: description.trim() || undefined,
+      description: description.trim() || (mode === 'edit' ? null : undefined),
       status,
     })
   }

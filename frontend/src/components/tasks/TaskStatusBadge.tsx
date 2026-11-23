@@ -1,7 +1,8 @@
 import type { TaskStatus } from '../../types'
+import { isTaskStatus } from '../../utils/status'
 
 interface TaskStatusBadgeProps {
-  status: TaskStatus
+  status: string
   className?: string
 }
 
@@ -21,9 +22,16 @@ const statusConfig: Record<TaskStatus, { label: string; className: string }> = {
 }
 
 export default function TaskStatusBadge({ status, className = '' }: TaskStatusBadgeProps) {
-  const config = statusConfig[status]
+  // Legacy rows may carry a status outside the contract; show it instead of crashing.
+  const config = isTaskStatus(status)
+    ? statusConfig[status]
+    : {
+        label: 'Unknown status',
+        className: 'bg-slate-500/15 text-slate-300 border border-slate-500/30',
+      }
   return (
     <span
+      title={isTaskStatus(status) ? undefined : `Unrecognised status: ${status || '(empty)'}. Change it to repair this task.`}
       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${config.className} ${className}`}
     >
       {config.label}

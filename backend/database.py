@@ -40,8 +40,12 @@ def _session_factory() -> sessionmaker:
 def init_db() -> None:
     """Create tables (no migrations in this project). Called from app startup."""
     from . import models  # noqa: F401  (registers the tables on Base)
+    from .task_status import normalize_task_statuses
 
-    Base.metadata.create_all(bind=get_engine())
+    engine = get_engine()
+    Base.metadata.create_all(bind=engine)
+    # Repair rows written before the status contract existed; never deletes tasks.
+    normalize_task_statuses(engine)
 
 
 def get_db():

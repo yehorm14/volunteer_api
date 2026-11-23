@@ -65,3 +65,61 @@ def test_user_cannot_read_update_or_delete_others_task(client, auth_headers, oth
     assert client.delete(url, headers=other_headers).status_code == 404
     # Owner's task is untouched.
     assert client.get(url, headers=auth_headers).json()["title"] == task["title"]
+
+
+# ── Status contract ─────────────────────────────────────────
+
+import pytest
+
+
+@pytest.mark.parametrize("status", ["pending", "in_progress", "completed"])
+def test_create_and_change_status_for_all_states(client, auth_headers, status):
+    task = make_task(client, auth_headers, status=status)
+    assert task["status"] == status
+    for target in ["pending", "in_progress", "completed"]:
+        r = client.patch(f"/tasks/{task['id']}", json={"status": target}, headers=auth_headers)
+        assert r.status_code == 200 and r.json()["status"] == target
+    listed = client.get("/tasks", headers=auth_headers).json()
+    assert [t["status"] for t in listed] == ["completed"]
+
+
+@pytest.mark.parametrize("bad", ["Pending", "In Progress", "done", "", "archived", 3, None])
+def test_create_rejects_invalid_status(client, auth_headers, bad):
+    r = client.post("/tasks", json={"title": "x", "status": bad}, headers=auth_headers)
+    assert r.status_code == 422
+    assert client.get("/tasks", headers=auth_headers).json() == []
+
+
+@pytest.mark.parametrize("bad", ["Pending", "done", "", None])
+def test_patch_rejects_invalid_status_and_leaves_task_unchanged(client, auth_headers, bad):
+    task = make_task(client, auth_headers)
+    r = client.patch(f"/tasks/{task['id']}", json={"status": bad}, headers=auth_headers)
+    assert r.status_code == 422
+    assert client.get(f"/tasks/{task['id']}", headers=auth_headers).json() == task
+
+
+@pytest.mark.parametrize("bad", [None, "", "   "])
+def test_title_must_be_present_and_not_blank(client, auth_headers, bad):
+    assert client.post("/tasks", json={"title": bad}, headers=auth_headers).status_code == 422
+    task = make_task(client, auth_headers)
+    r = client.patch(f"/tasks/{task['id']}", json={"title": bad}, headers=auth_headers)
+    assert r.status_code == 422
+    assert client.get(f"/tasks/{task['id']}", headers=auth_headers).json()["title"] == task["title"]
+
+
+def test_title_is_trimmed(client, auth_headers):
+    assert make_task(client, auth_headers, title="  Hello  ")["title"] == "Hello"
+
+
+def test_patch_null_description_clears_it(client, auth_headers):
+    task = make_task(client, auth_headers)
+    r = client.patch(f"/tasks/{task['id']}", json={"description": None}, headers=auth_headers)
+    assert r.status_code == 200
+    assert r.json()["description"] is None
+    assert r.json()["title"] == task["title"]
+
+
+def test_patch_empty_body_changes_nothing(client, auth_headers):
+    task = make_task(client, auth_headers)
+    r = client.patch(f"/tasks/{task['id']}", json={}, headers=auth_headers)
+    assert r.status_code == 200 and r.json() == task

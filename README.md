@@ -18,7 +18,7 @@ A task manager for volunteer coordinators, with optional GPT-4o-mini helpers for
 ## Features
 
 - Register and log in with email and password (at least 8 characters, bcrypt hashes, JWT bearer tokens).
-- Create, view, edit and delete tasks with `pending`, `in_progress` and `completed` status.
+- Create, view, edit and delete tasks with `pending`, `in_progress` and `completed` status (the API rejects anything else; sending `description: null` clears the description).
 - Dashboard with status counts, filter tabs and optimistic updates that roll back on failure.
 - Ownership checks on every task route; another user's task returns 404.
 - AI categorise: one-word category and short explanation for a task.
@@ -101,7 +101,7 @@ The user is created at startup, or on demand with `python -m backend.seed_demo`.
 
 ## Tests
 
-56 backend tests, run with `python -m pytest` from the repo root. They use an in-memory SQLite database per test and never read `.env`. They cover:
+91 backend tests, run with `python -m pytest` from the repo root. They use an in-memory SQLite database per test and never read `.env`. They cover:
 
 - Auth: registration, duplicate emails, password length rules (8 characters minimum, 72 bytes maximum), login, JWT validity, rejected tokens.
 - Tasks: create, list, update and delete, plus ownership checks (another user gets 404) and auth required on every route.
