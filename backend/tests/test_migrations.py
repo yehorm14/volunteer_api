@@ -174,7 +174,9 @@ def test_email_migration_lowercases_and_resolves_case_duplicates(use_db):
         command.upgrade(cfg, "0003")
         c.execute(text("INSERT INTO users (id, email, hashed_password, is_active) VALUES "
                        "(1, 'Alice@Example.com', 'x', true), (2, 'alice@example.com', 'x', true), "
-                       "(3, 'ALICE@example.com', 'x', true), (4, 'Bob@Example.com', 'x', true), (5, NULL, 'x', true)"))
+                       "(3, 'ALICE@example.com', 'x', true), (4, 'Bob@Example.com', 'x', true), (5, NULL, 'x', true), "
+                       "(6, 'alice+duplicate-2@example.com', 'x', true), "
+                       "(7, 'ALICE+DUPLICATE-2-2@EXAMPLE.COM', 'x', true)"))
         c.execute(text("INSERT INTO tasks (title, status, owner_id) VALUES ('mine', 'pending', 2)"))
         c.commit()
     migrate.upgrade_to_head()
@@ -182,10 +184,12 @@ def test_email_migration_lowercases_and_resolves_case_duplicates(use_db):
         rows = c.execute(text("SELECT id, email, is_active FROM users ORDER BY id")).all()
         assert [(r[0], r[1], bool(r[2])) for r in rows] == [
             (1, "alice@example.com", True),
-            (2, "alice+duplicate-2@example.com", False),
+            (2, "alice+duplicate-2-3@example.com", False),
             (3, "alice+duplicate-3@example.com", False),
             (4, "bob@example.com", True),
             (5, None, True),
+            (6, "alice+duplicate-2@example.com", True),
+            (7, "alice+duplicate-2-2@example.com", True),
         ]
         assert c.execute(text("SELECT owner_id FROM tasks")).scalar() == 2  # no data lost
     with pytest.raises(IntegrityError), database.get_engine().begin() as c:

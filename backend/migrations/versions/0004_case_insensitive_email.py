@@ -6,7 +6,7 @@ Revises: 0003
 Existing rows that differ only by case (A@x.com and a@x.com) would collide once lower-cased.
 Nothing is deleted and no tasks move. For each such group the oldest account (lowest id) keeps
 the plain lower-cased address; every other account is deactivated and renamed to
-``<local>+duplicate-<id>@<domain>`` so it stays unique, keeps its tasks and password, and can be
+``<local>+duplicate-<id>@<domain>`` with a numeric suffix if that address is taken. It keeps its tasks and password and can be
 found and merged or removed by hand. Each rename is logged.
 """
 import logging
@@ -23,23 +23,30 @@ INDEX_NAME = "uq_users_email_lower"
 log = logging.getLogger("alembic.runtime.migration")
 
 
-def _duplicate_name(lowered: str, user_id: int) -> str:
+def _duplicate_name(lowered: str, user_id: int, reserved: set[str]) -> str:
     local, at, domain = lowered.rpartition("@")
-    if not at:
-        return f"{lowered}+duplicate-{user_id}"
-    return f"{local}+duplicate-{user_id}@{domain}"
+    prefix = f"{local if at else lowered}+duplicate-{user_id}"
+    suffix = f"@{domain}" if at else ""
+    candidate = prefix + suffix
+    index = 2
+    while candidate in reserved:
+        candidate = f"{prefix}-{index}{suffix}"
+        index += 1
+    reserved.add(candidate)
+    return candidate
 
 
 def upgrade() -> None:
     bind = op.get_bind()
     # lower() is evaluated by the database itself so the grouping matches the index below exactly.
     rows = bind.execute(sa.text("SELECT id, email, lower(email) FROM users WHERE email IS NOT NULL ORDER BY id")).all()
+    reserved = {lowered for _, _, lowered in rows}
     seen: set[str] = set()
     keepers: list[tuple[int, str]] = []
     # Rename the losers first: a keeper's lower-cased address may equal a loser's current address.
     for user_id, email, lowered in rows:
         if lowered in seen:
-            renamed = _duplicate_name(lowered, user_id)
+            renamed = _duplicate_name(lowered, user_id, reserved)
             log.warning("users.id=%s email %r duplicates an earlier account when ignoring case; renamed to %r and deactivated", user_id, email, renamed)
             bind.execute(
                 sa.text("UPDATE users SET email = :email, is_active = :inactive WHERE id = :id"),
