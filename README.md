@@ -81,7 +81,7 @@ cp .env.example .env   # set SECRET_KEY (required); OPENAI_API_KEY is optional
 uvicorn backend.main:app --reload
 ```
 
-In a second terminal:
+In a second terminal, use Node.js 22.12 or later on the Node 22 line used by CI:
 
 ```bash
 cd frontend && npm ci && npm run dev
