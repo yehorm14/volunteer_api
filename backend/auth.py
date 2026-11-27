@@ -91,15 +91,15 @@ def get_current_user(
     except jwt.PyJWTError:
         raise credentials_exception
 
-    # Resolve by the immutable user id. Tokens without a valid integer "uid" (issued before
-    # the id claim existed, whose email "sub" may now point at a different account after
-    # email normalisation) are rejected so the user simply signs in again.
+    # Require the new uid claim and bind the subject to the same current account.
+    # SQLite can reuse an id if a user was deleted.
     uid = payload.get("uid")
-    if not isinstance(uid, int) or isinstance(uid, bool):
+    subject = payload.get("sub")
+    if not isinstance(uid, int) or isinstance(uid, bool) or not isinstance(subject, str):
         raise credentials_exception
 
     user = db.query(models.User).filter(models.User.id == uid).first()
-    if user is None or not user.is_active:
+    if user is None or not user.is_active or user.email != subject:
         raise credentials_exception
 
     return user

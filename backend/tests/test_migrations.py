@@ -15,7 +15,7 @@ from sqlalchemy import Column, ForeignKey, Integer, MetaData, String, Boolean, T
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 
-from backend import database, migrate
+from backend import auth, database, migrate
 from backend.database import Base, normalize_database_url
 from backend.main import create_app
 
@@ -165,8 +165,8 @@ def test_auth_task_flow_survives_an_app_restart(use_db):
         assert client.delete(f"/tasks/{t['id']}", headers=h).status_code == 204
 
 
-def test_email_migration_lowercases_and_resolves_case_duplicates(use_db):
-    """0004 lower-cases emails; accounts that collide once lower-cased are kept, renamed and deactivated."""
+def test_email_migration_normalises_and_resolves_duplicates(use_db):
+    """0004 trims whitespace and lower-cases emails, then renames and deactivates duplicates."""
     from alembic import command
 
     with database.get_engine().connect() as c:
@@ -176,7 +176,10 @@ def test_email_migration_lowercases_and_resolves_case_duplicates(use_db):
                        "(1, 'Alice@Example.com', 'x', true), (2, 'alice@example.com', 'x', true), "
                        "(3, 'ALICE@example.com', 'x', true), (4, 'Bob@Example.com', 'x', true), (5, NULL, 'x', true), "
                        "(6, 'alice+duplicate-2@example.com', 'x', true), "
-                       "(7, 'ALICE+DUPLICATE-2-2@EXAMPLE.COM', 'x', true)"))
+                       "(7, 'ALICE+DUPLICATE-2-2@EXAMPLE.COM', 'x', true), "
+                       "(8, :padded, 'x', true), (9, 'ånne@example.com', 'x', true), "
+                       "(10, ' ånne+duplicate-9@example.com ', 'x', true)"),
+                  {"padded": "\u2003ÅNNE@Example.com\t"})
         c.execute(text("INSERT INTO tasks (title, status, owner_id) VALUES ('mine', 'pending', 2)"))
         c.commit()
     migrate.upgrade_to_head()
@@ -190,16 +193,42 @@ def test_email_migration_lowercases_and_resolves_case_duplicates(use_db):
             (5, None, True),
             (6, "alice+duplicate-2@example.com", True),
             (7, "alice+duplicate-2-2@example.com", True),
+            (8, "ånne@example.com", True),
+            (9, "ånne+duplicate-9-2@example.com", False),
+            (10, "ånne+duplicate-9@example.com", True),
         ]
         assert c.execute(text("SELECT owner_id FROM tasks")).scalar() == 2  # no data lost
     with pytest.raises(IntegrityError), database.get_engine().begin() as c:
         c.execute(text("INSERT INTO users (email) VALUES ('BOB@example.com')"))
 
 
+def test_legacy_email_whitespace_and_unicode_case_do_not_break_login(use_db):
+    from alembic import command
+
+    password = "pw123456"
+    legacy_email = "\u2003Øystein@Example.com\t"
+    with database.get_engine().connect() as c:
+        command.upgrade(migrate._config(c), "0003")
+        c.execute(text("INSERT INTO users (id, email, hashed_password, is_active) VALUES (1, :email, :password, true)"),
+                  {"email": legacy_email, "password": auth.get_password_hash(password)})
+        c.execute(text("INSERT INTO tasks (title, status, owner_id) VALUES ('keep my task', 'pending', 1)"))
+        c.commit()
+
+    with TestClient(create_app()) as client:
+        for email in (legacy_email, "øystein@example.com"):
+            response = client.post("/auth/login", data={"username": email, "password": password})
+            assert response.status_code == 200, response.text
+            headers = {"Authorization": f"Bearer {response.json()['access_token']}"}
+            tasks = client.get("/tasks", headers=headers)
+            assert tasks.status_code == 200
+            assert [task["title"] for task in tasks.json()] == ["keep my task"]
+
+
 @pytest.mark.parametrize("demo_email, expected_demo_id", [
     ("Sample@Example.com", 1),
     ("SAMPLE@example.com", None),
     ("sample@example.com", None),
+    ("Other@Example.com", None),
 ])
 def test_email_migration_retains_only_the_configured_demo_identity(use_db, monkeypatch, demo_email, expected_demo_id):
     from alembic import command
@@ -209,7 +238,8 @@ def test_email_migration_retains_only_the_configured_demo_identity(use_db, monke
     with database.get_engine().connect() as c:
         command.upgrade(migrate._config(c), "0003")
         c.execute(text("INSERT INTO users (id, email, is_active) VALUES "
-                       "(1, 'Sample@Example.com', true), (2, 'SAMPLE@example.com', true)"))
+                       "(1, 'Sample@Example.com', true), (2, 'SAMPLE@example.com', true), "
+                       "(3, ' Other@Example.com ', true), (4, 'Other@Example.com', true)"))
         c.commit()
 
     migrate.upgrade_to_head()

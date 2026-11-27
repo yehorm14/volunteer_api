@@ -177,6 +177,25 @@ def test_legacy_email_subject_token_is_rejected(client):
     assert client.get("/tasks", headers={"Authorization": f"Bearer {bad_uid}"}).status_code == 401
 
 
+def test_token_is_rejected_if_its_user_id_is_reassigned(client):
+    original_email = "first@example.com"
+    replacement_email = "replacement@example.com"
+    response = client.post("/auth/register", json={"email": original_email, "password": "pw123456"})
+    assert response.status_code == 201
+    headers = _login_headers(client, original_email)
+
+    with _db(client) as db:
+        original = db.query(models.User).filter_by(email=original_email).one()
+        replacement = models.User(id=original.id, email=replacement_email, hashed_password=original.hashed_password)
+        db.delete(original)
+        db.flush()
+        db.add(replacement)
+        db.commit()
+
+    assert client.get("/tasks", headers=headers).status_code == 401
+    assert client.get("/tasks", headers=_login_headers(client, replacement_email)).status_code == 200
+
+
 def test_renamed_duplicate_token_cannot_read_keeper_tasks(client):
     """After migration 0004 an old token whose subject was the duplicate's original email must not reach the keeper."""
     client.post("/auth/register", json={"email": "a@x.com", "password": "pw123456"})
