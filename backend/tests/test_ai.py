@@ -1,3 +1,4 @@
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -140,3 +141,51 @@ def test_extract_rejects_empty_notes(client, auth_headers):
     client.app.dependency_overrides[get_async_openai_client] = lambda: MagicMock()
     r = client.post("/tasks/extract", json={"notes": ""}, headers=auth_headers)
     assert r.status_code == 422
+
+
+# --- the async route must not run blocking DB work on the event loop ----------
+
+def _spy_off_loop(monkeypatch, target: str, calls: list):
+    """Wrap `target` so each call records whether it ran on the event-loop thread."""
+    module_path, name = target.rsplit(".", 1)
+    module = __import__(module_path, fromlist=[name])
+    original = getattr(module, name)
+
+    def wrapper(*args, **kwargs):
+        try:
+            asyncio.get_running_loop()
+            calls.append("on_loop")
+        except RuntimeError:
+            calls.append("off_loop")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(module, name, wrapper)
+
+
+def test_extract_persists_task_off_the_event_loop(client, auth_headers, monkeypatch):
+    calls: list = []
+    _spy_off_loop(monkeypatch, "backend.routers.ai._create_extracted_task", calls)
+    parsed = schemas.ParsedTask(title="Call shelter", description="d")
+    fake = MagicMock()
+    fake.beta.chat.completions.parse = AsyncMock(
+        return_value=SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(refusal=None, parsed=parsed))])
+    )
+    client.app.dependency_overrides[get_async_openai_client] = lambda: fake
+
+    r = client.post("/tasks/extract", json={"notes": "x"}, headers=auth_headers)
+
+    assert r.status_code == 201
+    assert calls == ["off_loop"]
+
+
+def test_extract_refund_runs_off_the_event_loop(client, auth_headers, monkeypatch):
+    calls: list = []
+    _spy_off_loop(monkeypatch, "backend.ai_quota.refund", calls)
+    fake = MagicMock()
+    fake.beta.chat.completions.parse = AsyncMock(side_effect=openai.OpenAIError("boom"))
+    client.app.dependency_overrides[get_async_openai_client] = lambda: fake
+
+    r = client.post("/tasks/extract", json={"notes": "x"}, headers=auth_headers)
+
+    assert r.status_code == 503
+    assert calls == ["off_loop"]

@@ -2,10 +2,14 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { AxiosError } from 'axios'
 import type { AICategorizeResponse, Task, ApiError } from '../../types'
+import { describeError } from '../../utils/errors'
 import * as api from '../../services/api'
 import Button from '../ui/Button'
 import Textarea from '../ui/Textarea'
 import { useTasks } from '../../hooks/useTasks'
+
+// Matches ExtractRequest.notes max_length in backend/schemas.py.
+export const MAX_NOTES_LENGTH = 10_000
 
 interface AIPanelProps {
   taskId: number
@@ -36,17 +40,19 @@ export default function AIPanel({ taskId, taskTitle }: AIPanelProps) {
     } catch (err) {
       const e = err as AxiosError<ApiError>
       if (e.response?.status === 503) {
-        setAiUnavailable(e.response.data?.detail ?? 'AI features are unavailable')
+        setAiUnavailable(describeError(err))
       } else {
-        setCatError(e.response?.data?.detail ?? 'Failed to categorize task')
+        setCatError(describeError(err))
       }
     } finally {
       setCatLoading(false)
     }
   }
 
+  const tooLong = notes.length > MAX_NOTES_LENGTH
+
   async function handleExtract() {
-    if (!notes.trim()) return
+    if (!notes.trim() || tooLong) return
     setExtractLoading(true)
     setAiUnavailable('')
     setExtractError('')
@@ -58,9 +64,9 @@ export default function AIPanel({ taskId, taskTitle }: AIPanelProps) {
     } catch (err) {
       const e = err as AxiosError<ApiError>
       if (e.response?.status === 503) {
-        setAiUnavailable(e.response.data?.detail ?? 'AI features are unavailable')
+        setAiUnavailable(describeError(err))
       } else {
-        setExtractError(e.response?.data?.detail ?? 'Failed to extract task from notes')
+        setExtractError(describeError(err))
       }
     } finally {
       setExtractLoading(false)
@@ -114,13 +120,21 @@ export default function AIPanel({ taskId, taskTitle }: AIPanelProps) {
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={3}
+          aria-describedby="notes-counter"
+          error={tooLong ? `Notes are too long. Shorten them to ${MAX_NOTES_LENGTH.toLocaleString('en-US')} characters or fewer.` : undefined}
         />
+        <p
+          id="notes-counter"
+          className={`mt-1 text-xs ${tooLong ? 'text-red-400' : 'text-slate-500'}`}
+        >
+          {notes.length.toLocaleString('en-US')} / {MAX_NOTES_LENGTH.toLocaleString('en-US')} characters
+        </p>
         <Button
           size="sm"
           variant="secondary"
           onClick={handleExtract}
           isLoading={extractLoading}
-          disabled={!notes.trim()}
+          disabled={!notes.trim() || tooLong}
           className="mt-3"
         >
           Extract task

@@ -26,6 +26,7 @@ export default function TaskDetail() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!id) return
@@ -57,12 +58,14 @@ export default function TaskDetail() {
   async function handleDelete() {
     if (!task) return
     setIsDeleting(true)
+    setDeleteError(null)
     try {
       await removeTask(task.id)
       navigate('/dashboard', { replace: true })
-    } catch {
+    } catch (err) {
+      // Keep the confirmation controls so the user can retry.
+      setDeleteError(`The task was not deleted. ${describeError(err)}`)
       setIsDeleting(false)
-      setDeleteConfirm(false)
     }
   }
 
@@ -128,6 +131,12 @@ export default function TaskDetail() {
             <p className="text-slate-500 text-sm italic mb-6">No description</p>
           )}
 
+          {deleteError && (
+            <div role="alert" className="mb-4 px-4 py-3 bg-red-950 border border-red-800 rounded-lg text-sm text-red-300">
+              {deleteError}
+            </div>
+          )}
+
           {!isDemo && (
             <div className="flex items-center gap-3 pt-4 border-t border-slate-800">
               <Button onClick={() => { setSaveError(null); setIsEditing(true) }} variant="secondary" size="sm">
@@ -148,7 +157,7 @@ export default function TaskDetail() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setDeleteConfirm(false)}
+                    onClick={() => { setDeleteConfirm(false); setDeleteError(null) }}
                   >
                     Cancel
                   </Button>
