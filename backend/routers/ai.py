@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.concurrency import run_in_threadpool
 from openai import APIConnectionError, AsyncOpenAI, OpenAI, OpenAIError, RateLimitError
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from .. import ai_quota, models, schemas
@@ -17,6 +18,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/tasks", tags=["ai"])
 
 AI_UNAVAILABLE_DETAIL = "AI service is currently unavailable. Please try again later."
+AI_INVALID_TASK_DETAIL = "The AI returned a task that could not be used. Please try again or rephrase your notes."
 
 
 @router.post("/{task_id}/ai-categorize")
@@ -46,14 +48,9 @@ def categorize_task_with_ai(
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=AI_UNAVAILABLE_DETAIL)
 
 
-def _create_extracted_task(db: Session, owner_id: int, extracted: schemas.ParsedTask) -> models.Task:
+def _create_extracted_task(db: Session, owner_id: int, task: schemas.TaskCreate) -> models.Task:
     """Blocking DB work for /tasks/extract; call it through run_in_threadpool from the async route."""
-    new_task = models.Task(
-        title=extracted.title,
-        description=extracted.description,
-        owner_id=owner_id,
-        status="pending",
-    )
+    new_task = models.Task(**task.model_dump(), owner_id=owner_id)
     db.add(new_task)
     db.commit()
     db.refresh(new_task)
@@ -98,8 +95,14 @@ async def extract_task_from_notes(
             if not extracted:
                 raise HTTPException(status_code=500, detail="AI failed to parse content.")
 
+            task = schemas.TaskCreate(title=extracted.title, description=extracted.description)
             # charge[0] is the user id; reading current_user.id here could lazy-load (sync DB) on the loop.
-            return await run_in_threadpool(_create_extracted_task, db, charge[0], extracted)
+            return await run_in_threadpool(_create_extracted_task, db, charge[0], task)
+
+        except ValidationError:
+            logger.warning("AI extract returned a task that failed validation")
+            await run_in_threadpool(ai_quota.refund, db, *charge)
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=AI_INVALID_TASK_DETAIL)
 
         except (RateLimitError, APIConnectionError):
             if attempt == max_attempts - 1:
