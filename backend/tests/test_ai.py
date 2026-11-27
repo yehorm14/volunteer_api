@@ -87,6 +87,47 @@ def test_extract_refusal_returns_400(client, auth_headers):
     assert r.status_code == 400
 
 
+def _extract_returning(client, title, description="d"):
+    parsed = SimpleNamespace(title=title, description=description)  # bypasses ParsedTask, like a loose provider
+    fake = MagicMock()
+    fake.beta.chat.completions.parse = AsyncMock(
+        return_value=SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(refusal=None, parsed=parsed))])
+    )
+    client.app.dependency_overrides[get_async_openai_client] = lambda: fake
+
+
+def test_extract_strips_generated_title(client, auth_headers):
+    _extract_returning(client, "  Call shelter  ")
+    r = client.post("/tasks/extract", json={"notes": "x"}, headers=auth_headers)
+    assert r.status_code == 201
+    assert r.json()["title"] == "Call shelter"
+
+
+@pytest.mark.parametrize(
+    "title, description",
+    [
+        ("", "d"),
+        ("   \n\t", "d"),
+        ("x" * (schemas.MAX_TITLE_LENGTH + 1), "d"),
+        ("Call shelter", "x" * (schemas.MAX_DESCRIPTION_LENGTH + 1)),
+    ],
+)
+def test_extract_invalid_output_creates_nothing_and_refunds_quota(client, auth_headers, monkeypatch, title, description):
+    monkeypatch.setenv("AI_DAILY_LIMIT", "1")
+    calls: list = []
+    _spy_off_loop(monkeypatch, "backend.ai_quota.refund", calls)
+    _extract_returning(client, title, description)
+    r = client.post("/tasks/extract", json={"notes": "x"}, headers=auth_headers)
+    assert r.status_code == 502
+    assert "could not be used" in r.json()["detail"]
+    assert client.get("/tasks", headers=auth_headers).json() == []
+    assert calls == ["off_loop"]
+
+    _extract_returning(client, "Call shelter")
+    retry = client.post("/tasks/extract", json={"notes": "x"}, headers=auth_headers)
+    assert retry.status_code == 201
+
+
 # --- ordering: ownership is checked before AI availability -------------------
 
 def test_categorize_missing_task_is_404_even_without_key(client, auth_headers):
