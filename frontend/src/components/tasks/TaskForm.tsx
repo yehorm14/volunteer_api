@@ -59,7 +59,8 @@ export default function TaskForm({
         }}
         placeholder="What needs to be done?"
         error={titleError}
-        autoFocus
+        autoFocus={mode === 'edit'}
+        data-dialog-initial-focus={mode === 'create' ? '' : undefined}
       />
       <Textarea
         label="Description"
