@@ -15,7 +15,7 @@ from sqlalchemy import Column, ForeignKey, Integer, MetaData, String, Boolean, T
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 
-from backend import database, migrate
+from backend import auth, database, migrate
 from backend.database import Base, normalize_database_url
 from backend.main import create_app
 
@@ -84,6 +84,8 @@ def _revision():
         return c.execute(text("SELECT version_num FROM alembic_version")).scalar()
 
 
+# NOTE: compare_metadata only checks the lower(email) expression index meaningfully on Postgres;
+# SQLite reflection ignores expression indexes, so the postgres CI job is the real check.
 def test_empty_database_reaches_target_schema(use_db):
     migrate.upgrade_to_head()
     assert migrate.is_up_to_date()
@@ -161,3 +163,87 @@ def test_auth_task_flow_survives_an_app_restart(use_db):
         assert tasks["Pack boxes"]["description"] == "10am"
         assert tasks["second"]["status"] == "completed"
         assert client.delete(f"/tasks/{t['id']}", headers=h).status_code == 204
+
+
+def test_email_migration_normalises_and_resolves_duplicates(use_db):
+    """0004 trims whitespace and lower-cases emails, then renames and deactivates duplicates."""
+    from alembic import command
+
+    with database.get_engine().connect() as c:
+        cfg = migrate._config(c)
+        command.upgrade(cfg, "0003")
+        c.execute(text("INSERT INTO users (id, email, hashed_password, is_active) VALUES "
+                       "(1, 'Alice@Example.com', 'x', true), (2, 'alice@example.com', 'x', true), "
+                       "(3, 'ALICE@example.com', 'x', true), (4, 'Bob@Example.com', 'x', true), (5, NULL, 'x', true), "
+                       "(6, 'alice+duplicate-2@example.com', 'x', true), "
+                       "(7, 'ALICE+DUPLICATE-2-2@EXAMPLE.COM', 'x', true), "
+                       "(8, :padded, 'x', true), (9, 'ånne@example.com', 'x', true), "
+                       "(10, ' ånne+duplicate-9@example.com ', 'x', true)"),
+                  {"padded": "\u2003ÅNNE@Example.com\t"})
+        c.execute(text("INSERT INTO tasks (title, status, owner_id) VALUES ('mine', 'pending', 2)"))
+        c.commit()
+    migrate.upgrade_to_head()
+    with database.get_engine().connect() as c:
+        rows = c.execute(text("SELECT id, email, is_active FROM users ORDER BY id")).all()
+        assert [(r[0], r[1], bool(r[2])) for r in rows] == [
+            (1, "alice@example.com", True),
+            (2, "alice+duplicate-2-3@example.com", False),
+            (3, "alice+duplicate-3@example.com", False),
+            (4, "bob@example.com", True),
+            (5, None, True),
+            (6, "alice+duplicate-2@example.com", True),
+            (7, "alice+duplicate-2-2@example.com", True),
+            (8, "ånne@example.com", True),
+            (9, "ånne+duplicate-9-2@example.com", False),
+            (10, "ånne+duplicate-9@example.com", True),
+        ]
+        assert c.execute(text("SELECT owner_id FROM tasks")).scalar() == 2  # no data lost
+    with pytest.raises(IntegrityError), database.get_engine().begin() as c:
+        c.execute(text("INSERT INTO users (email) VALUES ('BOB@example.com')"))
+
+
+def test_legacy_email_whitespace_and_unicode_case_do_not_break_login(use_db):
+    from alembic import command
+
+    password = "pw123456"
+    legacy_email = "\u2003Øystein@Example.com\t"
+    with database.get_engine().connect() as c:
+        command.upgrade(migrate._config(c), "0003")
+        c.execute(text("INSERT INTO users (id, email, hashed_password, is_active) VALUES (1, :email, :password, true)"),
+                  {"email": legacy_email, "password": auth.get_password_hash(password)})
+        c.execute(text("INSERT INTO tasks (title, status, owner_id) VALUES ('keep my task', 'pending', 1)"))
+        c.commit()
+
+    with TestClient(create_app()) as client:
+        for email in (legacy_email, "øystein@example.com"):
+            response = client.post("/auth/login", data={"username": email, "password": password})
+            assert response.status_code == 200, response.text
+            headers = {"Authorization": f"Bearer {response.json()['access_token']}"}
+            tasks = client.get("/tasks", headers=headers)
+            assert tasks.status_code == 200
+            assert [task["title"] for task in tasks.json()] == ["keep my task"]
+
+
+@pytest.mark.parametrize("demo_email, expected_demo_id", [
+    ("Sample@Example.com", 1),
+    ("SAMPLE@example.com", None),
+    ("sample@example.com", None),
+    ("Other@Example.com", None),
+])
+def test_email_migration_retains_only_the_configured_demo_identity(use_db, monkeypatch, demo_email, expected_demo_id):
+    from alembic import command
+
+    monkeypatch.setenv("DEMO_PUBLIC", "1")
+    monkeypatch.setenv("DEMO_USER_EMAIL", demo_email)
+    with database.get_engine().connect() as c:
+        command.upgrade(migrate._config(c), "0003")
+        c.execute(text("INSERT INTO users (id, email, is_active) VALUES "
+                       "(1, 'Sample@Example.com', true), (2, 'SAMPLE@example.com', true), "
+                       "(3, ' Other@Example.com ', true), (4, 'Other@Example.com', true)"))
+        c.commit()
+
+    migrate.upgrade_to_head()
+
+    with database.get_engine().connect() as c:
+        demo_ids = c.execute(text("SELECT id FROM users WHERE is_demo AND is_active")).scalars().all()
+        assert demo_ids == ([expected_demo_id] if expected_demo_id is not None else [])

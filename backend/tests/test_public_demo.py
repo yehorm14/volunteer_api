@@ -125,3 +125,15 @@ def test_demo_token_is_short_lived(client, public_demo):
     payload = jwt.decode(token, os.environ["SECRET_KEY"], algorithms=["HS256"])
     assert payload["demo"] is True
     assert payload["exp"] - datetime.now(timezone.utc).timestamp() <= 15 * 60 + 5
+
+
+def test_ordinary_account_cannot_become_the_public_demo_through_configuration(client, db, monkeypatch):
+    headers = register_and_login(client, DEMO_EMAIL)
+    monkeypatch.setenv("DEMO_USER_EMAIL", DEMO_EMAIL.upper())
+    monkeypatch.setenv("DEMO_PUBLIC", "1")
+
+    assert seed_demo(db, DEMO_EMAIL, "unused-password") is False
+    response = client.post("/auth/demo")
+    assert response.status_code == 503
+    assert "access_token" not in response.json()
+    assert client.post("/tasks", headers=headers, json={"title": "My task"}).status_code == 201

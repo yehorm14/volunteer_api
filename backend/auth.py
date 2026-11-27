@@ -87,18 +87,19 @@ def get_current_user(
     )
     
     try:
-        # Decode the token to extract the user email
         payload = jwt.decode(token, get_secret_key(), algorithms=[_algorithm()])
-        # The | None satisfies the Pylance type checker for dictionary get methods
-        email: str | None = payload.get("sub")
-        if email is None:
-            raise credentials_exception
     except jwt.PyJWTError:
         raise credentials_exception
-    
-    # Check the database to make sure the user actually exists
-    user = db.query(models.User).filter(models.User.email == email).first()
-    if user is None:
+
+    # Require the new uid claim and bind the subject to the same current account.
+    # SQLite can reuse an id if a user was deleted.
+    uid = payload.get("uid")
+    subject = payload.get("sub")
+    if not isinstance(uid, int) or isinstance(uid, bool) or not isinstance(subject, str):
         raise credentials_exception
-        
+
+    user = db.query(models.User).filter(models.User.id == uid).first()
+    if user is None or not user.is_active or user.email != subject:
+        raise credentials_exception
+
     return user

@@ -1,9 +1,14 @@
+from email_validator import validate_email
 from pydantic import BaseModel, Field, field_validator
 
 from .task_status import DEFAULT_STATUS, TaskStatus
 
 MAX_TITLE_LENGTH = 200
 MAX_DESCRIPTION_LENGTH = 5000
+
+
+def normalize_email(email: str) -> str:
+    return email.strip().lower()
 
 
 def _clean_title(v: str) -> str:
@@ -61,13 +66,21 @@ class Task(BaseModel):
 
 # User Schemas
 class UserBase(BaseModel):
-    email: str
+    email: str = Field(json_schema_extra={"format": "email"})
 
 MIN_PASSWORD_LENGTH = 8
 
 
 class UserCreate(UserBase):
     password: str = Field(min_length=MIN_PASSWORD_LENGTH)
+
+    @field_validator("email")
+    @classmethod
+    def validate_account_email(cls, value: str) -> str:
+        email = normalize_email(value)
+        # Keep the same spelling login uses, including the submitted international domain form.
+        validate_email(email, check_deliverability=False)
+        return email
 
     @field_validator("password")
     @classmethod

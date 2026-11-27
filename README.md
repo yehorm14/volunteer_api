@@ -17,7 +17,7 @@ A task manager for volunteer coordinators, with optional GPT-4o-mini helpers for
 
 ## Features
 
-- Register and log in with email and password (at least 8 characters, bcrypt hashes, JWT bearer tokens).
+- Register and log in with email and password (at least 8 characters, bcrypt hashes, JWT bearer tokens). Emails are validated and stored lower-case, so login ignores case and `A@x.com` and `a@x.com` are one account.
 - Create, view, edit and delete tasks with `pending`, `in_progress` and `completed` status (the API rejects anything else; sending `description: null` clears the description).
 - Dashboard with status counts, filter tabs and optimistic updates that roll back on failure.
 - Ownership checks on every task route; another user's task returns 404.
@@ -138,3 +138,13 @@ Vitest, Testing Library and msw run the real app in jsdom against an in-memory f
 ## Licence
 
 MIT. See [LICENSE](LICENSE).
+
+## Upgrading: case-duplicate emails (migration 0004)
+
+Migration 0004 trims surrounding whitespace from stored emails, lower-cases them, and adds a unique index on `lower(email)`. If existing accounts differ only by whitespace or case, the oldest one (lowest id) keeps the normalised address. Each other one is deactivated and renamed to `<local>+duplicate-<id>@<domain>`, with an extra numeric suffix when the alias is already taken. It keeps its tasks and password, nothing is deleted, and each rename is logged as a warning during the migration. Review those accounts afterwards and merge or remove them by hand. Downgrading drops the index while keeping the stored email spellings from the migration.
+
+For an existing public demo, run migration 0004 with its current `DEMO_PUBLIC` and `DEMO_USER_EMAIL` settings. The migration retains the demo designation only for the exact old account if it stays active. If that account is deactivated as a duplicate or was not designated during migration, set `DEMO_USER_EMAIL` to a fresh unused address and restart to seed a new sample workspace. The public endpoint returns `503` until a designated demo account is available.
+
+Sign-in tokens now carry the user id (`uid` claim) and the API checks that the id and email subject identify the same active account. Tokens issued before this deploy have no `uid`, so every existing session is signed out once and users log in again. This also stops an old token for a renamed duplicate account from resolving to the surviving account.
+
+Note: the `compare_metadata` check in `backend/tests/test_migrations.py` only compares the `lower(email)` expression index meaningfully on Postgres (SQLite reflection skips expression indexes), so rely on the Postgres CI job for it.

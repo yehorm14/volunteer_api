@@ -17,7 +17,7 @@ def _truthy(value: str | None) -> bool:
 
 
 def demo_email() -> str:
-    return os.getenv("DEMO_USER_EMAIL", "").strip()
+    return os.getenv("DEMO_USER_EMAIL", "").strip().lower()
 
 
 def is_public_demo_enabled() -> bool:
@@ -25,4 +25,4 @@ def is_public_demo_enabled() -> bool:
 
 
 def is_demo_user(user: models.User) -> bool:
-    return is_public_demo_enabled() and user.email == demo_email()  # type: ignore[comparison-overlap]
+    return bool(user.is_active and user.is_demo and user.email == demo_email() and is_public_demo_enabled())
