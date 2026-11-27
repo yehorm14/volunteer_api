@@ -1,4 +1,5 @@
 import jwt
+import pytest
 
 from backend import models
 from backend.database import get_db
@@ -98,10 +99,10 @@ def test_register_accepts_8_character_password(client):
     assert r.status_code == 201
 
 
-def test_register_invalid_email_rejected(client):
-    for bad in ["not-an-email", "a@", "@example.com", "a b@example.com", "User <a@example.com>", ""]:
-        r = client.post("/auth/register", json={"email": bad, "password": "pw123456"})
-        assert r.status_code == 422, bad
+@pytest.mark.parametrize("bad", ["not-an-email", "a@", "@example.com", "a b@example.com", "User <a@example.com>", ""])
+def test_register_invalid_email_rejected(client, bad):
+    response = client.post("/auth/register", json={"email": bad, "password": "pw123456"})
+    assert response.status_code == 422
 
 
 def test_login_accepts_the_international_domain_spelling_used_at_registration(client):
