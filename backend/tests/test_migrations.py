@@ -194,3 +194,26 @@ def test_email_migration_lowercases_and_resolves_case_duplicates(use_db):
         assert c.execute(text("SELECT owner_id FROM tasks")).scalar() == 2  # no data lost
     with pytest.raises(IntegrityError), database.get_engine().begin() as c:
         c.execute(text("INSERT INTO users (email) VALUES ('BOB@example.com')"))
+
+
+@pytest.mark.parametrize("demo_email, expected_demo_id", [
+    ("Sample@Example.com", 1),
+    ("SAMPLE@example.com", None),
+    ("sample@example.com", None),
+])
+def test_email_migration_retains_only_the_configured_demo_identity(use_db, monkeypatch, demo_email, expected_demo_id):
+    from alembic import command
+
+    monkeypatch.setenv("DEMO_PUBLIC", "1")
+    monkeypatch.setenv("DEMO_USER_EMAIL", demo_email)
+    with database.get_engine().connect() as c:
+        command.upgrade(migrate._config(c), "0003")
+        c.execute(text("INSERT INTO users (id, email, is_active) VALUES "
+                       "(1, 'Sample@Example.com', true), (2, 'SAMPLE@example.com', true)"))
+        c.commit()
+
+    migrate.upgrade_to_head()
+
+    with database.get_engine().connect() as c:
+        demo_ids = c.execute(text("SELECT id FROM users WHERE is_demo AND is_active")).scalars().all()
+        assert demo_ids == ([expected_demo_id] if expected_demo_id is not None else [])

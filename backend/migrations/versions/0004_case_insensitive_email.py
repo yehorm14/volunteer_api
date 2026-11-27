@@ -10,6 +10,7 @@ the plain lower-cased address; every other account is deactivated and renamed to
 found and merged or removed by hand. Each rename is logged.
 """
 import logging
+import os
 
 from alembic import op
 import sqlalchemy as sa
@@ -38,6 +39,13 @@ def _duplicate_name(lowered: str, user_id: int, reserved: set[str]) -> str:
 
 def upgrade() -> None:
     bind = op.get_bind()
+    # SQLite's legacy transaction mode does not start a transaction for ALTER TABLE.
+    if bind.dialect.name == "sqlite" and not bind.connection.driver_connection.in_transaction:
+        bind.exec_driver_sql("BEGIN IMMEDIATE")
+    op.add_column("users", sa.Column("is_demo", sa.Boolean(), nullable=False, server_default=sa.false()))
+    # A public workspace can only retain the exact identity that the old endpoint used.
+    public_demo_enabled = os.getenv("DEMO_PUBLIC", "").strip().lower() in {"1", "true", "yes", "on"}
+    demo_email = os.getenv("DEMO_USER_EMAIL", "").strip() if public_demo_enabled else ""
     # lower() is evaluated by the database itself so the grouping matches the index below exactly.
     rows = bind.execute(sa.text("SELECT id, email, lower(email) FROM users WHERE email IS NOT NULL ORDER BY id")).all()
     reserved = {lowered for _, _, lowered in rows}
@@ -54,6 +62,11 @@ def upgrade() -> None:
             )
         else:
             seen.add(lowered)
+            if demo_email and email == demo_email:
+                bind.execute(
+                    sa.text("UPDATE users SET is_demo = :is_demo WHERE id = :id AND is_active"),
+                    {"is_demo": True, "id": user_id},
+                )
             if email != lowered:
                 keepers.append((user_id, lowered))
     for user_id, lowered in keepers:
@@ -64,3 +77,4 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Lower-cased addresses and renamed duplicates are not restored.
     op.drop_index(INDEX_NAME, table_name="users")
+    op.drop_column("users", "is_demo")

@@ -64,7 +64,7 @@ def login_to_sample_workspace(db: DB):
     if not demo.is_public_demo_enabled():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     user = db.query(models.User).filter(models.User.email == demo.demo_email()).first()
-    if user is None:
+    if user is None or not demo.is_demo_user(user):
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="The sample workspace is not ready yet.")
     # demo=true makes the token read-only on its own; the short expiry limits how long one stays valid.
     token = auth.create_access_token(data={"sub": user.email, "uid": user.id, "demo": True}, expires_minutes=DEMO_TOKEN_MINUTES)

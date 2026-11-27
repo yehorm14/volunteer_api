@@ -141,6 +141,8 @@ MIT. See [LICENSE](LICENSE).
 
 Migration 0004 lower-cases every stored email and adds a unique index on `lower(email)`. If an existing database holds accounts that differ only by case, the oldest one (lowest id) keeps the plain lower-cased address. Each other one is deactivated and renamed to `<local>+duplicate-<id>@<domain>`, with an extra numeric suffix when the alias is already taken. It keeps its tasks and password, nothing is deleted, and each rename is logged as a warning during the migration. Review those accounts afterwards and merge or remove them by hand. Downgrading drops the index but does not restore the original casing.
 
+For an existing public demo, run migration 0004 with its current `DEMO_PUBLIC` and `DEMO_USER_EMAIL` settings. The migration retains the demo designation only for the exact old account if it stays active. If that account is deactivated as a duplicate or was not designated during migration, set `DEMO_USER_EMAIL` to a fresh unused address and restart to seed a new sample workspace. The public endpoint returns `503` until a designated demo account is available.
+
 Sign-in tokens now carry the user id (`uid` claim) and the API resolves the account by id, and rejects deactivated accounts. Tokens issued before this deploy have no `uid`, so every existing session is signed out once and users log in again. This also stops an old token for a renamed duplicate account from resolving to the surviving account.
 
 Note: the `compare_metadata` check in `backend/tests/test_migrations.py` only compares the `lower(email)` expression index meaningfully on Postgres (SQLite reflection skips expression indexes), so rely on the Postgres CI job for it.

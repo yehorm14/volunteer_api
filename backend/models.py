@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Index, func, Integer, String, Boolean, Date, ForeignKey, CheckConstraint
+from sqlalchemy import Column, Index, func, Integer, String, Boolean, Date, ForeignKey, CheckConstraint, false
 from sqlalchemy.orm import relationship
 from .database import Base
 from .task_status import DEFAULT_STATUS, TASK_STATUSES
@@ -10,6 +10,7 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     hashed_password = Column(String)
     is_active = Column(Boolean, default=True)
+    is_demo = Column(Boolean, nullable=False, server_default=false())
     # Emails are stored lower-cased; this index also stops a differently-cased duplicate slipping in
     # through any other path. Kept in step with migration 0004.
     __table_args__ = (Index("uq_users_email_lower", func.lower(email), unique=True),)

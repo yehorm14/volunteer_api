@@ -28,7 +28,7 @@ def seed_demo(db: Session, email: str, password: str) -> bool:
     email = schemas.normalize_email(email)
     if db.query(models.User).filter(models.User.email == email).first():
         return False
-    user = models.User(email=email, hashed_password=auth.get_password_hash(password))
+    user = models.User(email=email, hashed_password=auth.get_password_hash(password), is_demo=True)
     db.add(user)
     db.flush()
     for title, description, status in SAMPLE_TASKS:
