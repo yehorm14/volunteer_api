@@ -126,6 +126,8 @@ CI (`.github/workflows/ci.yml`) runs the backend tests, a Postgres job (migratio
 cd frontend && npm ci && npm test
 ```
 
+The browser test runs against the local Vite app with mocked task requests. Run `npx playwright install chromium` and `npm run test:e2e` from `frontend`. CI runs the same test to verify keyboard focus, background inertness and the create-task dialog’s accessible name.
+
 Vitest, Testing Library and msw run the real app in jsdom against an in-memory fake of the API. Nothing touches a live backend, provider or database, and any request a test has not mocked fails the test. They cover sign-in, creating, status changes, filtering and deleting tasks, legacy statuses, a failed status change, delete and create (the list is restored and the user is told why), a failed load, a stale list response, and overlapping edits.
 
 ## Limitations

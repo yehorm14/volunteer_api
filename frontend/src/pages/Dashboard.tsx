@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useRef, useState, type MouseEvent } from 'react'
 import type { TaskStatus, TaskFormValues } from '../types'
 import { useTasks } from '../hooks/useTasks'
 import { useAuth } from '../hooks/useAuth'
@@ -33,6 +33,8 @@ export default function Dashboard() {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
+  const createTrigger = useRef<HTMLButtonElement | null>(null)
+  const headerCreateButton = useRef<HTMLButtonElement | null>(null)
   // Failure of a status change or delete; the list has already been restored when this shows.
   const [actionError, setActionError] = useState<string | null>(null)
 
@@ -44,10 +46,17 @@ export default function Dashboard() {
 
   const filtered = filter === 'all' ? tasks : tasks.filter((t) => t.status === filter)
 
-  function openCreate() {
+  function openCreate(event: MouseEvent<HTMLButtonElement>) {
+    createTrigger.current = event.currentTarget
     setCreateError(null)
     setIsCreateOpen(true)
   }
+
+  const restoreCreateFocus = useCallback(() => {
+    const trigger = createTrigger.current
+    const target = trigger?.isConnected ? trigger : headerCreateButton.current
+    target?.focus({ preventScroll: true })
+  }, [])
 
   async function handleCreate(data: TaskFormValues) {
     setCreating(true)
@@ -97,7 +106,7 @@ export default function Dashboard() {
             {tasks.length} task{tasks.length !== 1 ? 's' : ''} total
           </p>
         </div>
-        {!isDemo && <Button onClick={openCreate}>+ New task</Button>}
+        {!isDemo && <Button ref={headerCreateButton} onClick={openCreate}>+ New task</Button>}
       </div>
 
       {isDemo && (
@@ -202,20 +211,21 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Create modal */}
-      <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="New task">
-        {createError && (
-          <div role="alert" className="mb-4 px-4 py-3 bg-red-950 border border-red-800 rounded-lg text-sm text-red-300">
-            {createError}
-          </div>
-        )}
-        <TaskForm
-          onSubmit={handleCreate}
-          onCancel={() => setIsCreateOpen(false)}
-          isLoading={creating}
-          mode="create"
-        />
-      </Modal>
+      {isCreateOpen && (
+        <Modal onClose={() => setIsCreateOpen(false)} restoreFocus={restoreCreateFocus} title="New task">
+          {createError && (
+            <div role="alert" className="mb-4 px-4 py-3 bg-red-950 border border-red-800 rounded-lg text-sm text-red-300">
+              {createError}
+            </div>
+          )}
+          <TaskForm
+            onSubmit={handleCreate}
+            onCancel={() => setIsCreateOpen(false)}
+            isLoading={creating}
+            mode="create"
+          />
+        </Modal>
+      )}
     </>
   )
 }

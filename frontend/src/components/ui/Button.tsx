@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react'
 import LoadingSpinner from './LoadingSpinner'
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -21,7 +21,7 @@ const sizeClasses = {
   lg: 'px-6 py-3 text-base font-medium rounded-xl',
 }
 
-export default function Button({
+export default forwardRef<HTMLButtonElement, ButtonProps>(function Button({
   variant = 'primary',
   size = 'md',
   isLoading = false,
@@ -29,9 +29,10 @@ export default function Button({
   children,
   className = '',
   ...props
-}: ButtonProps) {
+}, ref) {
   return (
     <button
+      ref={ref}
       disabled={disabled || isLoading}
       className={`inline-flex items-center justify-center gap-2 transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
       {...props}
@@ -40,4 +41,4 @@ export default function Button({
       {children}
     </button>
   )
-}
+})
