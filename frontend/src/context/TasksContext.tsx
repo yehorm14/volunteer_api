@@ -9,6 +9,8 @@ interface TasksContextValue {
   error: string | null
   fetchTasks: () => Promise<void>
   addTask: (data: TaskCreate) => Promise<Task>
+  /** Add or replace a task that was already saved on the server (e.g. by AI extraction). */
+  insertTask: (task: Task) => void
   editTask: (id: number, data: TaskUpdate) => Promise<Task>
   removeTask: (id: number) => Promise<void>
 }
@@ -72,6 +74,16 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  function insertTask(task: Task) {
+    // A fetch that started before this task was saved may not include it: make it re-read.
+    mutations.current += 2
+    commit((prev) =>
+      prev.some((t) => t.id === task.id)
+        ? prev.map((t) => (t.id === task.id ? task : t))
+        : [task, ...prev]
+    )
+  }
+
   async function editTask(id: number, data: TaskUpdate): Promise<Task> {
     mutations.current++
     const before = tasksRef.current.find((t) => t.id === id)
@@ -126,7 +138,7 @@ export function TasksProvider({ children }: { children: ReactNode }) {
 
   return (
     <TasksContext.Provider
-      value={{ tasks, isLoading, error, fetchTasks, addTask, editTask, removeTask }}
+      value={{ tasks, isLoading, error, fetchTasks, addTask, insertTask, editTask, removeTask }}
     >
       {children}
     </TasksContext.Provider>

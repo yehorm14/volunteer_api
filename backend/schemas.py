@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field, field_validator
 from .task_status import DEFAULT_STATUS, TaskStatus
 
 MAX_TITLE_LENGTH = 200
+MAX_DESCRIPTION_LENGTH = 5000
 
 
 def _clean_title(v: str) -> str:
@@ -17,7 +18,7 @@ def _clean_title(v: str) -> str:
 # Task Schemas
 class TaskCreate(BaseModel):
     title: str
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
     status: TaskStatus = DEFAULT_STATUS
 
     _check_title = field_validator("title")(_clean_title)
@@ -30,7 +31,7 @@ class TaskUpdate(BaseModel):
     """
 
     title: str | None = None
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
     status: TaskStatus | None = None
 
     @field_validator("title", "status", mode="before")

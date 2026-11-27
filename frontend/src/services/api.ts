@@ -46,15 +46,29 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+// Wrapped so tests can observe the full-page redirect that jsdom cannot perform.
+export const navigation = {
+  toLogin: () => {
+    window.location.href = '/login'
+  },
+}
+
 // ── Response interceptor: handle 401 ────────────────────────
 
 api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
-    if (error.response?.status === 401) {
+    // A 401 from the auth endpoints (wrong password) is feedback for the form, not an expired session.
+    // Only a rejected request that carried a stored token ends the session and redirects.
+    const url = error.config?.url ?? ''
+    const isAuthRequest = url.startsWith('/auth/')
+    if (error.response?.status === 401 && !isAuthRequest) {
+      const hadSession = localStorage.getItem('access_token') !== null
       localStorage.removeItem('access_token')
       localStorage.removeItem(DEMO_SESSION_KEY)
-      window.location.href = '/login'
+      if (hadSession && window.location.pathname !== '/login') {
+        navigation.toLogin()
+      }
     }
     return Promise.reject(error)
   }
@@ -86,9 +100,18 @@ export async function loginDemo(): Promise<TokenResponse> {
 
 // ── Tasks ────────────────────────────────────────────────────
 
+// The API pages GET /tasks (default 100, max 500); fetch every page so the UI still shows all tasks.
+export const TASK_PAGE_SIZE = 100
+
 export async function getTasks(): Promise<Task[]> {
-  const res = await api.get<Task[]>('/tasks')
-  return res.data
+  const all: Task[] = []
+  for (;;) {
+    const res = await api.get<Task[]>('/tasks', {
+      params: { limit: TASK_PAGE_SIZE, offset: all.length },
+    })
+    all.push(...res.data)
+    if (res.data.length < TASK_PAGE_SIZE) return all
+  }
 }
 
 export async function getTask(id: number): Promise<Task> {

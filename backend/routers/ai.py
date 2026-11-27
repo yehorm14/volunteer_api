@@ -3,8 +3,10 @@ import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.concurrency import run_in_threadpool
 from openai import APIConnectionError, AsyncOpenAI, OpenAI, OpenAIError, RateLimitError
 from pydantic import ValidationError
+from sqlalchemy.orm import Session
 
 from .. import ai_quota, models, schemas
 from ..ai_client import get_async_openai_client, get_openai_client
@@ -46,6 +48,15 @@ def categorize_task_with_ai(
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=AI_UNAVAILABLE_DETAIL)
 
 
+def _create_extracted_task(db: Session, owner_id: int, task: schemas.TaskCreate) -> models.Task:
+    """Blocking DB work for /tasks/extract; call it through run_in_threadpool from the async route."""
+    new_task = models.Task(**task.model_dump(), owner_id=owner_id)
+    db.add(new_task)
+    db.commit()
+    db.refresh(new_task)
+    return new_task
+
+
 @router.post("/extract", response_model=schemas.Task, status_code=status.HTTP_201_CREATED)
 async def extract_task_from_notes(
     payload: schemas.ExtractRequest,
@@ -84,35 +95,25 @@ async def extract_task_from_notes(
             if not extracted:
                 raise HTTPException(status_code=500, detail="AI failed to parse content.")
 
-            # Generated tasks go through the same contract as POST /tasks (strip, nonblank, length cap).
-            try:
-                valid = schemas.TaskCreate(title=extracted.title, description=extracted.description)
-            except ValidationError:
-                logger.warning("AI extract returned a task that failed validation")
-                ai_quota.refund(db, *charge)
-                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=AI_INVALID_TASK_DETAIL)
+            task = schemas.TaskCreate(title=extracted.title, description=extracted.description)
+            # charge[0] is the user id; reading current_user.id here could lazy-load (sync DB) on the loop.
+            return await run_in_threadpool(_create_extracted_task, db, charge[0], task)
 
-            new_task = models.Task(
-                title=valid.title,
-                description=valid.description,
-                owner_id=current_user.id,
-                status="pending",
-            )
-            db.add(new_task)
-            db.commit()
-            db.refresh(new_task)
-            return new_task
+        except ValidationError:
+            logger.warning("AI extract returned a task that failed validation")
+            await run_in_threadpool(ai_quota.refund, db, *charge)
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=AI_INVALID_TASK_DETAIL)
 
         except (RateLimitError, APIConnectionError):
             if attempt == max_attempts - 1:
                 logger.exception("OpenAI extract request failed after retries")
-                ai_quota.refund(db, *charge)
+                await run_in_threadpool(ai_quota.refund, db, *charge)
                 raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=AI_UNAVAILABLE_DETAIL)
             await asyncio.sleep(1.5 * (attempt + 1))
 
         except OpenAIError:
             logger.exception("OpenAI extract request failed")
-            ai_quota.refund(db, *charge)
+            await run_in_threadpool(ai_quota.refund, db, *charge)
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=AI_UNAVAILABLE_DETAIL)
 
     raise HTTPException(status_code=500, detail="Extraction failed unexpectedly.")
