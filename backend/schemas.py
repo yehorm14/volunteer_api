@@ -1,4 +1,5 @@
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from email_validator import validate_email
+from pydantic import BaseModel, Field, field_validator
 
 from .task_status import DEFAULT_STATUS, TaskStatus
 
@@ -65,19 +66,21 @@ class Task(BaseModel):
 
 # User Schemas
 class UserBase(BaseModel):
-    email: EmailStr
-
-    @field_validator("email", mode="after")
-    @classmethod
-    def lower_case_email(cls, v: str) -> str:
-        # Accounts are case-insensitive: A@x.com and a@x.com are the same account.
-        return normalize_email(v)
+    email: str = Field(json_schema_extra={"format": "email"})
 
 MIN_PASSWORD_LENGTH = 8
 
 
 class UserCreate(UserBase):
     password: str = Field(min_length=MIN_PASSWORD_LENGTH)
+
+    @field_validator("email")
+    @classmethod
+    def validate_account_email(cls, value: str) -> str:
+        email = normalize_email(value)
+        # Keep the same spelling login uses, including the submitted international domain form.
+        validate_email(email, check_deliverability=False)
+        return email
 
     @field_validator("password")
     @classmethod
